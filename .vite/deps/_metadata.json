@@ -1,52 +1,61 @@
 {
-  "hash": "a616bde7",
-  "configHash": "d0c57815",
-  "lockfileHash": "38a39efb",
-  "browserHash": "e1cbff41",
+  "hash": "ecaa02d6",
+  "configHash": "6a4c0195",
+  "lockfileHash": "9c5e4ed7",
+  "browserHash": "5f880740",
   "optimized": {
     "react": {
       "src": "../../node_modules/react/index.js",
       "file": "react.js",
-      "fileHash": "6f9c1a4c",
+      "fileHash": "9fb83873",
       "needsInterop": true
     },
     "react-dom": {
       "src": "../../node_modules/react-dom/index.js",
       "file": "react-dom.js",
-      "fileHash": "b2c774bb",
+      "fileHash": "6fb1ba80",
       "needsInterop": true
     },
     "react/jsx-dev-runtime": {
       "src": "../../node_modules/react/jsx-dev-runtime.js",
       "file": "react_jsx-dev-runtime.js",
-      "fileHash": "9538510e",
+      "fileHash": "46db630a",
       "needsInterop": true
     },
     "react/jsx-runtime": {
       "src": "../../node_modules/react/jsx-runtime.js",
       "file": "react_jsx-runtime.js",
-      "fileHash": "df4ebfae",
+      "fileHash": "47751421",
       "needsInterop": true
+    },
+    "@supabase/supabase-js": {
+      "src": "../../node_modules/@supabase/supabase-js/dist/index.mjs",
+      "file": "@supabase_supabase-js.js",
+      "fileHash": "9cc004e4",
+      "needsInterop": false
     },
     "react-dom/client": {
       "src": "../../node_modules/react-dom/client.js",
       "file": "react-dom_client.js",
-      "fileHash": "0a1bd669",
+      "fileHash": "8c90978f",
       "needsInterop": true
     },
     "react-router-dom": {
       "src": "../../node_modules/react-router-dom/dist/index.mjs",
       "file": "react-router-dom.js",
-      "fileHash": "5457d80f",
+      "fileHash": "5bb0c34e",
       "needsInterop": false
     }
   },
   "chunks": {
-    "chunk-LV7NIE3W": {
-      "file": "chunk-LV7NIE3W.js"
+    "chunk-G25MCSZ2": {
+      "file": "chunk-G25MCSZ2.js"
     },
-    "chunk-R4VOGKSS": {
-      "file": "chunk-R4VOGKSS.js"
+    "chunk-HWMK2RSU": {
+      "file": "chunk-HWMK2RSU.js"
+    },
+    "chunk-5WRI5ZAA": {
+      "file": "chunk-5WRI5ZAA.js"
     }
   }
 }
