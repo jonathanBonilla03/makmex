@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import DatabaseConnectionWrapper from "./components/DatabaseConnectionWrapper"
 import StorefrontShell from "./components/StorefrontShell"
 import CategoryPage from "./pages/CategoryPage"
-import SupabaseTestPage from "./pages/SupabaseTestPage"
 
 function Placeholder({ title }) {
   return (
@@ -26,7 +25,6 @@ export default function App() {
             <Route path="/kits" element={<CategoryPage title="Kits" />} />
             <Route path="/brands" element={<Placeholder title="Brands" />} />
             <Route path="/deals" element={<Placeholder title="Deals" />} />
-            <Route path="/test-db" element={<SupabaseTestPage />} />
           </Routes>
         </StorefrontShell>
       </BrowserRouter>
