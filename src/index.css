@@ -1,2 +1,44 @@
 @import "tailwindcss";
 @config "../tailwind.config.js";
+
+/* Custom Range Slider Styles */
+.slider::-webkit-slider-thumb {
+  appearance: none;
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: #FF6B35; /* makmex-orange */
+  cursor: pointer;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.slider::-moz-range-thumb {
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: #FF6B35; /* makmex-orange */
+  cursor: pointer;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.slider::-webkit-slider-track {
+  background: #3a3a3a; /* makmex-border */
+  height: 6px;
+  border-radius: 3px;
+}
+
+.slider::-moz-range-track {
+  background: #3a3a3a; /* makmex-border */
+  height: 6px;
+  border-radius: 3px;
+}
+
+.slider:focus {
+  outline: none;
+}
+
+.slider:focus::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.3);
+}

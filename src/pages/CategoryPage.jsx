@@ -21,6 +21,10 @@ export default function CategoryPage({ title = "Power Tools" }) {
   const [selectedLocations, setSelectedLocations] = useState(new Set());
   const [selectedProductTypes, setSelectedProductTypes] = useState(new Set());
   
+  // Price range filter
+  const [priceRange, setPriceRange] = useState({ min: 0, max: 1000 });
+  const [priceInputs, setPriceInputs] = useState({ min: '', max: '' });
+  
   // Filter dropdown states (which sections are expanded)
   const [expandedSections, setExpandedSections] = useState(new Set(['brands'])); // Start with brands expanded
 
@@ -70,6 +74,15 @@ export default function CategoryPage({ title = "Power Tools" }) {
         setConditions(conditionsResult.data);
         setWarehouses(warehousesResult.data);
         setPowerSources(powerSourcesResult.data);
+        
+        // Set price range bounds based on actual product prices
+        if (productsResult.data && productsResult.data.length > 0) {
+          const prices = productsResult.data.map(p => p.price);
+          const minPrice = Math.floor(Math.min(...prices));
+          const maxPrice = Math.ceil(Math.max(...prices));
+          setPriceRange({ min: minPrice, max: maxPrice });
+          setPriceInputs({ min: minPrice.toString(), max: maxPrice.toString() });
+        }
       } catch (err) {
         setError(err.message);
         console.error("Error loading category page data:", err);
@@ -83,6 +96,11 @@ export default function CategoryPage({ title = "Power Tools" }) {
 
   const filteredProducts = useMemo(() => {
     let items = [...products];
+
+    // Price range filter
+    const minPrice = parseFloat(priceInputs.min) || 0;
+    const maxPrice = parseFloat(priceInputs.max) || Infinity;
+    items = items.filter((p) => p.price >= minPrice && p.price <= maxPrice);
 
     // Brand filter (using brand_name from JOIN)
     if (selectedBrands.size > 0) {
@@ -123,7 +141,28 @@ export default function CategoryPage({ title = "Power Tools" }) {
     } // relevance = keep original order
 
     return items;
-  }, [products, selectedBrands, selectedConditions, selectedPowerSources, selectedLocations, selectedProductTypes, sort]);
+  }, [products, selectedBrands, selectedConditions, selectedPowerSources, selectedLocations, selectedProductTypes, sort, priceInputs]);
+
+  // Calculate available filter options based on current products in stock
+  const availableFilterOptions = useMemo(() => {
+    // Only consider products that are in stock
+    const inStockProducts = products.filter(p => p.in_stock);
+    
+    return {
+      brands: Array.from(new Set(inStockProducts.map(p => p.brand_name))).sort(),
+      conditions: conditions.filter(condition => 
+        inStockProducts.some(p => p.condition_name === condition.general_condition)
+      ).sort((a, b) => {
+        const order = ['AA', 'A', 'B', 'C', 'D', 'E', 'F'];
+        return order.indexOf(a.id) - order.indexOf(b.id);
+      }),
+      productTypes: Array.from(new Set(inStockProducts.map(p => p.product_type_name))).sort(),
+      powerSources: powerSources.filter(powerSource => 
+        inStockProducts.some(p => p.power_source === (powerSource.value || powerSource))
+      ),
+      locations: Array.from(new Set(inStockProducts.map(p => p.warehouse_location).filter(Boolean))).sort()
+    };
+  }, [products, conditions, powerSources]);
 
   const shownProducts = filteredProducts.slice(0, 12);
 
@@ -141,6 +180,84 @@ export default function CategoryPage({ title = "Power Tools" }) {
     setExpandedSections(next);
   };
 
+  const handlePriceRangeChange = (type, value) => {
+    const numValue = Math.max(0, parseInt(value) || 0);
+    const maxAllowed = priceRange.max;
+    const minAllowed = priceRange.min;
+    
+    setPriceInputs(prev => {
+      const currentMin = parseInt(prev.min) || 0;
+      const currentMax = parseInt(prev.max) || maxAllowed;
+      
+      if (type === 'min') {
+        // If new min is greater than current max
+        if (numValue > currentMax) {
+          // If we can increase max, do so
+          if (numValue < maxAllowed) {
+            return { min: numValue.toString(), max: (numValue + 1).toString() };
+          } else {
+            // Max is at limit, set min to max - 1 or keep current min if max is at minimum
+            const adjustedMin = Math.min(numValue, maxAllowed - 1, maxAllowed);
+            return { ...prev, min: Math.max(adjustedMin, minAllowed).toString() };
+          }
+        }
+        return { ...prev, min: numValue.toString() };
+      } else {
+        // type === 'max'
+        // If new max is less than current min
+        if (numValue < currentMin) {
+          // If we can decrease min, do so
+          if (numValue > minAllowed) {
+            return { min: (numValue - 1).toString(), max: numValue.toString() };
+          } else {
+            // Min is at limit, set max to min + 1 or keep current max if min is at maximum
+            const adjustedMax = Math.max(numValue, minAllowed + 1, minAllowed);
+            return { ...prev, max: Math.min(adjustedMax, maxAllowed).toString() };
+          }
+        }
+        return { ...prev, max: numValue.toString() };
+      }
+    });
+  };
+
+  const handlePriceSliderChange = (type, value) => {
+    const numValue = parseInt(value);
+    const maxAllowed = priceRange.max;
+    const minAllowed = priceRange.min;
+    
+    setPriceInputs(prev => {
+      const currentMin = parseInt(prev.min) || 0;
+      const currentMax = parseInt(prev.max) || maxAllowed;
+      
+      if (type === 'min') {
+        // If new min is greater than current max
+        if (numValue > currentMax) {
+          // If we can increase max, do so
+          if (numValue < maxAllowed) {
+            return { min: numValue.toString(), max: (numValue + 1).toString() };
+          } else {
+            // Max is at limit, constrain min to not exceed max
+            return { ...prev, min: Math.min(numValue, currentMax).toString() };
+          }
+        }
+        return { ...prev, min: numValue.toString() };
+      } else {
+        // type === 'max'  
+        // If new max is less than current min
+        if (numValue < currentMin) {
+          // If we can decrease min, do so
+          if (numValue > minAllowed) {
+            return { min: (numValue - 1).toString(), max: numValue.toString() };
+          } else {
+            // Min is at limit, constrain max to not go below min
+            return { ...prev, max: Math.max(numValue, currentMin).toString() };
+          }
+        }
+        return { ...prev, max: numValue.toString() };
+      }
+    });
+  };
+
   const clearFilters = () => {
     setSelectedBrands(new Set());
     setSelectedConditions(new Set());
@@ -148,6 +265,14 @@ export default function CategoryPage({ title = "Power Tools" }) {
     setSelectedLocations(new Set());
     setSelectedProductTypes(new Set());
     setSort("relevance");
+    
+    // Reset price range to full range
+    if (products.length > 0) {
+      const prices = products.map(p => p.price);
+      const minPrice = Math.floor(Math.min(...prices));
+      const maxPrice = Math.ceil(Math.max(...prices));
+      setPriceInputs({ min: minPrice.toString(), max: maxPrice.toString() });
+    }
   };
 
   return (
@@ -221,16 +346,90 @@ export default function CategoryPage({ title = "Power Tools" }) {
                   onToggle={() => toggleSection('brands')}
                   selectedCount={selectedBrands.size}
                 >
-                  {brands.map((brand) => (
-                    <Check
-                      key={brand.id}
-                      label={brand.name}
-                      checked={selectedBrands.has(brand.name)}
-                      onChange={() =>
-                        toggleSetValue(setSelectedBrands, selectedBrands, brand.name)
-                      }
-                    />
-                  ))}
+                  {availableFilterOptions.brands.map((brandName) => {
+                    // Find the brand object for the key
+                    const brand = brands.find(b => b.name === brandName);
+                    return (
+                      <Check
+                        key={brand?.id || brandName}
+                        label={brandName}
+                        checked={selectedBrands.has(brandName)}
+                        onChange={() =>
+                          toggleSetValue(setSelectedBrands, selectedBrands, brandName)
+                        }
+                      />
+                    );
+                  })}
+                </FilterGroup>
+
+                <FilterGroup 
+                  title="Price Range" 
+                  sectionId="priceRange"
+                  isExpanded={expandedSections.has('priceRange')}
+                  onToggle={() => toggleSection('priceRange')}
+                  selectedCount={0}
+                >
+                  <div className="space-y-4">
+                    {/* Manual Input Fields */}
+                    <div className="flex gap-2 items-center">
+                      <div className="flex-1">
+                        <label className="block text-xs font-medium text-makmex-muted mb-1">Min</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={priceInputs.min}
+                          onChange={(e) => handlePriceRangeChange('min', e.target.value)}
+                          className="w-full px-2 py-1 text-xs rounded border border-makmex-border bg-makmex-surface text-makmex-text"
+                        />
+                      </div>
+                      <span className="text-makmex-muted mt-4">-</span>
+                      <div className="flex-1">
+                        <label className="block text-xs font-medium text-makmex-muted mb-1">Max</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={priceInputs.max}
+                          onChange={(e) => handlePriceRangeChange('max', e.target.value)}
+                          className="w-full px-2 py-1 text-xs rounded border border-makmex-border bg-makmex-surface text-makmex-text"
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* Range Sliders */}
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-medium text-makmex-muted mb-1">
+                          Min: ${priceInputs.min}
+                        </label>
+                        <input
+                          type="range"
+                          min={priceRange.min}
+                          max={priceRange.max}
+                          value={priceInputs.min}
+                          onChange={(e) => handlePriceSliderChange('min', e.target.value)}
+                          className="w-full h-2 bg-makmex-border rounded-lg appearance-none cursor-pointer slider"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-makmex-muted mb-1">
+                          Max: ${priceInputs.max}
+                        </label>
+                        <input
+                          type="range"
+                          min={priceRange.min}
+                          max={priceRange.max}
+                          value={priceInputs.max}
+                          onChange={(e) => handlePriceSliderChange('max', e.target.value)}
+                          className="w-full h-2 bg-makmex-border rounded-lg appearance-none cursor-pointer slider"
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* Range Display */}
+                    <div className="text-xs text-center text-makmex-muted bg-makmex-panel px-2 py-1 rounded">
+                      ${priceInputs.min} - ${priceInputs.max}
+                    </div>
+                  </div>
                 </FilterGroup>
 
                 <FilterGroup 
@@ -240,13 +439,7 @@ export default function CategoryPage({ title = "Power Tools" }) {
                   onToggle={() => toggleSection('conditions')}
                   selectedCount={selectedConditions.size}
                 >
-                  {conditions
-                    .sort((a, b) => {
-                      // Sort by condition ID: AA, B, C, D, E, F
-                      const order = ['AA', 'A', 'B', 'C', 'D', 'E', 'F'];
-                      return order.indexOf(a.id) - order.indexOf(b.id);
-                    })
-                    .map((condition) => (
+                  {availableFilterOptions.conditions.map((condition) => (
                     <Check
                       key={condition.id}
                       label={condition.general_condition}
@@ -265,20 +458,16 @@ export default function CategoryPage({ title = "Power Tools" }) {
                   onToggle={() => toggleSection('productTypes')}
                   selectedCount={selectedProductTypes.size}
                 >
-                  {conditions.length > 0 && (
-                    <>
-                      {Array.from(new Set(products.map(p => p.product_type_name))).sort().map((productType) => (
-                        <Check
-                          key={productType}
-                          label={productType}
-                          checked={selectedProductTypes.has(productType)}
-                          onChange={() =>
-                            toggleSetValue(setSelectedProductTypes, selectedProductTypes, productType)
-                          }
-                        />
-                      ))}
-                    </>
-                  )}
+                  {availableFilterOptions.productTypes.map((productType) => (
+                    <Check
+                      key={productType}
+                      label={productType}
+                      checked={selectedProductTypes.has(productType)}
+                      onChange={() =>
+                        toggleSetValue(setSelectedProductTypes, selectedProductTypes, productType)
+                      }
+                    />
+                  ))}
                 </FilterGroup>
 
                 <FilterGroup 
@@ -288,7 +477,7 @@ export default function CategoryPage({ title = "Power Tools" }) {
                   onToggle={() => toggleSection('powerSources')}
                   selectedCount={selectedPowerSources.size}
                 >
-                  {powerSources.map((powerSource) => (
+                  {availableFilterOptions.powerSources.map((powerSource) => (
                     <Check
                       key={powerSource.value || powerSource}
                       label={powerSource.display || powerSource}
@@ -307,7 +496,7 @@ export default function CategoryPage({ title = "Power Tools" }) {
                   onToggle={() => toggleSection('locations')}
                   selectedCount={selectedLocations.size}
                 >
-                  {Array.from(new Set(products.map(p => p.warehouse_location).filter(Boolean))).sort().map((warehouseId) => {
+                  {availableFilterOptions.locations.map((warehouseId) => {
                     // Find the warehouse name for display
                     const warehouse = warehouses.find(w => w.id === warehouseId);
                     const displayName = warehouse ? `${warehouseId} - ${warehouse.name}` : warehouseId;
