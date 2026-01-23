@@ -1,20 +1,36 @@
 // Helper function to format condition display with emoji and symbol
 function getConditionDisplay(conditionName, conditionId) {
-  // Map condition names to colored circle emojis and formatted display
-  const conditionMap = {
-    'New': { emoji: '🟢', display: 'New' },
-    'New in Box': { emoji: '🟢', display: 'New' },
-    'New without a box': { emoji: '🟢', display: 'New' },
-    'Pre-owned (minimal defects)': { emoji: '🟡', display: 'Pre-Owned' },
-    'Pre-owned (moderate wear)': { emoji: '🟠', display: 'Pre-Owned' },
-    'Used': { emoji: '🟠', display: 'Used' },
-    'Used (notable touches)': { emoji: '🔴', display: 'Used' },
-    'Very Used': { emoji: '🔴', display: 'Used' }
+  // Map by condition ID for more reliable mapping
+  const conditionIdMap = {
+    'AA': { emoji: '🟢', display: 'New' },      // New in Box
+    'A': { emoji: '🟢', display: 'New' },       // New without a box
+    'B': { emoji: '🟡', display: 'Pre-Owned' }, // Pre-owned (minimal defects)
+    'C': { emoji: '🟠', display: 'Pre-Owned' }, // Pre-owned (moderate wear)
+    'D': { emoji: '🟠', display: 'Used' },      // Used
+    'E': { emoji: '🔴', display: 'Used' },      // Used (notable touches)
+    'F': { emoji: '🔴', display: 'Used' }       // Very Used
   };
 
-  const condition = conditionMap[conditionName] || { emoji: '🟢', display: 'New' };
+  // Use condition ID mapping if available, otherwise fallback to name mapping
+  let condition;
+  if (conditionId && conditionIdMap[conditionId]) {
+    condition = conditionIdMap[conditionId];
+  } else {
+    // Fallback name mapping for cases where ID is not available
+    const conditionNameMap = {
+      'New': { emoji: '🟢', display: 'New' },
+      'New in Box': { emoji: '🟢', display: 'New' },
+      'New without a box': { emoji: '🟢', display: 'New' },
+      'Pre-owned (minimal defects)': { emoji: '🟡', display: 'Pre-Owned' },
+      'Pre-owned (moderate wear)': { emoji: '🟠', display: 'Pre-Owned' },
+      'Used': { emoji: '🟠', display: 'Used' },
+      'Used (notable touches)': { emoji: '🔴', display: 'Used' },
+      'Very Used': { emoji: '🔴', display: 'Used' }
+    };
+    condition = conditionNameMap[conditionName] || { emoji: '🟢', display: 'New' };
+  }
   
-  // Add condition ID symbol if available (including AA for New in Box)
+  // Add condition ID symbol if available
   if (conditionId) {
     return `${condition.emoji} ${condition.display} (${conditionId})`;
   }
