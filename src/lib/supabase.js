@@ -150,20 +150,30 @@ export async function getProducts() {
       // Get primary warehouse (first one with stock, or first one if none have stock)
       const primaryInventory = product.inventory?.find(inv => inv.quantity > 0) || product.inventory?.[0]
       
-      // Create condition suffix mapping
+      // Create condition suffix mapping based on actual condition IDs
       const conditionSuffixes = {
-        'A': 'AA',           // New without a box
+        'A': 'A',            // New without a box
         'AA': 'AA',          // New in Box  
-        'B': 'BB',           // Pre-owned (minimal defects)
-        'C': 'CC',           // Pre-owned (moderate wear)
-        'D': 'DD',           // Used
-        'E': 'EE',           // Used (notable touches)
-        'F': 'FF'            // Very Used
+        'B': 'B',            // Pre-owned (minimal defects)
+        'C': 'C',            // Pre-owned (moderate wear)
+        'D': 'D',            // Used
+        'E': 'E',            // Used (notable touches)
+        'F': 'F'             // Very Used
       }
       
-      // Generate SKU with condition suffix
-      const conditionSuffix = conditionSuffixes[product.condition_id] || 'XX'
-      const displaySku = product.sku ? `${product.sku}-${conditionSuffix}` : null
+      // Generate SKU with condition suffix only if SKU doesn't already have one
+      let displaySku = product.sku;
+      if (product.sku && product.condition_id) {
+        const conditionSuffix = conditionSuffixes[product.condition_id];
+        if (conditionSuffix) {
+          // Check if SKU already ends with a condition pattern (like -AA, -B, etc.)
+          const hasConditionSuffix = /-[A-F]{1,2}$/.test(product.sku);
+          if (!hasConditionSuffix) {
+            displaySku = `${product.sku}-${conditionSuffix}`;
+          }
+          // If it already has a suffix, use the original SKU as-is
+        }
+      }
       
       return {
         ...product,

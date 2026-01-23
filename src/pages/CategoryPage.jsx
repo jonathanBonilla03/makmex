@@ -161,17 +161,24 @@ export default function CategoryPage({ title = "Power Tools" }) {
           </p>
         </div>
 
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value)}
-          disabled={loading}
-          className="rounded-xl border border-makmex-border bg-makmex-surface px-3 py-2 text-sm disabled:opacity-50"
-        >
-          <option value="relevance">Sort by relevance</option>
-          <option value="price_asc">Price: Low to High</option>
-          <option value="price_desc">Price: High to Low</option>
-          <option value="newest">Newest</option>
-        </select>
+        <div className="relative">
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+            disabled={loading}
+            className="rounded-xl border border-makmex-border bg-makmex-surface px-4 py-2 pr-10 text-sm disabled:opacity-50 appearance-none w-full"
+          >
+            <option value="relevance">Sort by relevance</option>
+            <option value="price_asc">Price: Low to High</option>
+            <option value="price_desc">Price: High to Low</option>
+            <option value="newest">Newest</option>
+          </select>
+          <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+            <svg className="w-4 h-4 text-makmex-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </div>
       </div>
 
       {/* Error State */}
@@ -202,11 +209,11 @@ export default function CategoryPage({ title = "Power Tools" }) {
       {!loading && !error && (
         <div className="flex gap-6">
           {/* Filters Sidebar */}
-          <aside className="w-64 flex-shrink-0">
-            <div className="sticky top-6 rounded-2xl border border-makmex-border bg-makmex-surface p-4">
-              <h2 className="mb-4 font-bold">Filters</h2>
+          <aside className="w-72 flex-shrink-0">
+            <div className="sticky top-6 rounded-2xl border border-makmex-border bg-makmex-surface p-5">
+              <h2 className="mb-5 text-lg font-bold">Filters</h2>
 
-              <div className="space-y-4 text-sm text-makmex-text">
+              <div className="space-y-3 text-sm text-makmex-text">
                 <FilterGroup 
                   title="Brand" 
                   sectionId="brands"
@@ -233,7 +240,13 @@ export default function CategoryPage({ title = "Power Tools" }) {
                   onToggle={() => toggleSection('conditions')}
                   selectedCount={selectedConditions.size}
                 >
-                  {conditions.map((condition) => (
+                  {conditions
+                    .sort((a, b) => {
+                      // Sort by condition ID: AA, B, C, D, E, F
+                      const order = ['AA', 'A', 'B', 'C', 'D', 'E', 'F'];
+                      return order.indexOf(a.id) - order.indexOf(b.id);
+                    })
+                    .map((condition) => (
                     <Check
                       key={condition.id}
                       label={condition.general_condition}
@@ -332,7 +345,7 @@ export default function CategoryPage({ title = "Power Tools" }) {
                 </p>
               </div>
             ) : (
-              <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <section className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
                 {shownProducts.map((product) => (
                   <ProductCard key={product.id} {...product} />
                 ))}
@@ -367,10 +380,10 @@ function FilterGroup({ title, children, sectionId, isExpanded, onToggle, selecte
       {/* Header - Always visible */}
       <button 
         onClick={onToggle}
-        className="w-full flex items-center justify-between p-3 text-left hover:bg-makmex-surface transition-colors"
+        className="w-full flex items-center justify-between p-4 text-left hover:bg-makmex-surface transition-colors"
       >
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold uppercase tracking-wide text-makmex-muted">
+          <span className="text-sm font-bold uppercase tracking-wide text-makmex-muted">
             {title}
           </span>
           {selectedCount > 0 && (
@@ -391,7 +404,7 @@ function FilterGroup({ title, children, sectionId, isExpanded, onToggle, selecte
       
       {/* Content - Collapsible */}
       {isExpanded && (
-        <div className="px-3 pb-3 space-y-2 max-h-48 overflow-y-auto">
+        <div className="px-4 pb-4 space-y-3 max-h-56 overflow-y-auto">
           {children}
         </div>
       )}
@@ -401,14 +414,14 @@ function FilterGroup({ title, children, sectionId, isExpanded, onToggle, selecte
 
 function Check({ label, checked, onChange }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2 text-sm text-makmex-muted hover:text-makmex-text">
+    <label className="flex cursor-pointer items-center gap-3 text-sm text-makmex-muted hover:text-makmex-text leading-relaxed">
       <input
         type="checkbox"
-        className="accent-makmex-orange"
+        className="accent-makmex-orange flex-shrink-0"
         checked={checked}
         onChange={onChange}
       />
-      {label}
+      <span className="break-words">{label}</span>
     </label>
   );
 }
