@@ -1,0 +1,47 @@
+products
+| column_name     | data_type         | is_nullable | column_default    | character_maximum_length |
+| --------------- | ----------------- | ----------- | ----------------- | ------------------------ |
+| id              | uuid              | NO          | gen_random_uuid() | null                     |
+| description     | text              | YES         | null              | null                     |
+| sku             | character varying | NO          | null              | 50                       |
+| image_url       | text              | YES         | null              | null                     |
+| condition_id    | text              | YES         | null              | null                     |
+| product_type_id | integer           | YES         | null              | null                     |
+| brand_id        | integer           | YES         | null              | null                     |
+| power_source    | text              | YES         | null              | null                     |
+| specs           | text              | YES         | null              | null                     |
+
+conditions
+| column_name       | data_type | is_nullable | column_default | character_maximum_length |
+| ----------------- | --------- | ----------- | -------------- | ------------------------ |
+| id                | text      | NO          | null           | null                     |
+| general_condition | text      | NO          | null           | null                     |
+| full_description  | text      | NO          | null           | null                     |
+
+product_types
+| column_name | data_type | is_nullable | column_default                            | character_maximum_length |
+| ----------- | --------- | ----------- | ----------------------------------------- | ------------------------ |
+| id          | integer   | NO          | nextval('product_types_id_seq'::regclass) | null                     |
+| name        | text      | NO          | null                                      | null                     |
+
+brands
+| column_name | data_type | is_nullable | column_default                     | character_maximum_length |
+| ----------- | --------- | ----------- | ---------------------------------- | ------------------------ |
+| id          | integer   | NO          | nextval('brands_id_seq'::regclass) | null                     |
+| name        | text      | NO          | null                               | null                     |
+
+inventory
+| column_name        | data_type                   | is_nullable | column_default    | character_maximum_length |
+| ------------------ | --------------------------- | ----------- | ----------------- | ------------------------ |
+| id                 | uuid                        | NO          | gen_random_uuid() | null                     |
+| product_id         | uuid                        | YES         | null              | null                     |
+| quantity           | integer                     | YES         | 0                 | null                     |
+| warehouse_location | text                        | YES         | null              | null                     |
+| last_updated       | timestamp without time zone | YES         | now()             | null                     |
+
+warehouse
+| column_name | data_type         | is_nullable | column_default | character_maximum_length |
+| ----------- | ----------------- | ----------- | -------------- | ------------------------ |
+| id          | text              | NO          | null           | null                     |
+| address     | character varying | YES         | null           | null                     |
+| name        | text              | YES         | null           | null                     |
