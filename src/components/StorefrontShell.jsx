@@ -56,22 +56,6 @@ export default function StorefrontShell({ children }) {
 
             {/* Actions */}
             <div className="hidden items-center gap-3 md:flex">
-              <button className="flex items-center gap-2 rounded-2xl border border-makmex-border bg-makmex-surface px-3 py-2 hover:border-makmex-orange/60">
-                <Icon>👤</Icon>
-                <div className="text-left leading-tight">
-                  <div className="text-xs text-makmex-muted">Account</div>
-                  <div className="text-sm font-semibold">Sign in</div>
-                </div>
-              </button>
-
-              <button className="flex items-center gap-2 rounded-2xl border border-makmex-border bg-makmex-surface px-3 py-2 hover:border-makmex-orange/60">
-                <Icon>📦</Icon>
-                <div className="text-left leading-tight">
-                  <div className="text-xs text-makmex-muted">Orders</div>
-                  <div className="text-sm font-semibold">Track</div>
-                </div>
-              </button>
-
               <button className="relative flex items-center gap-2 rounded-2xl border border-makmex-border bg-makmex-surface px-3 py-2 hover:border-makmex-orange/60">
                 <Icon>🛒</Icon>
                 <div className="text-left leading-tight">

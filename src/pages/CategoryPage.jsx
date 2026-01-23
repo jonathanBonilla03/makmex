@@ -1,87 +1,88 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import ProductCard from "../components/ProductCard";
-
-/**
- * Temporary mock data matching the actual Supabase schema with inventory
- * Only shows products that are in stock (quantity > 0)
- * Replace this with real Supabase queries once you're ready
- */
-const MOCK_PRODUCTS = Array.from({ length: 24 }).map((_, i) => {
-  const brandNames = ["Milwaukee", "DeWalt", "Makita"];
-  const conditions = [
-    { id: "new", general_condition: "New", full_description: "Brand new, never used" },
-    { id: "refurb", general_condition: "Refurbished", full_description: "Professionally refurbished, tested and certified" },
-    { id: "open", general_condition: "Open Box", full_description: "Open box, all original accessories included" }
-  ];
-  const typeNames = ["Drill", "Saw", "Kit", "Combo", "Battery"];
-  const powerSources = ["Cordless", "Corded", "Battery", "Gas"];
-  const warehouses = [
-    { id: "WH001", name: "Downtown Warehouse" },
-    { id: "WH002", name: "North Location" },
-    { id: "WH003", name: "South Depot" }
-  ];
-
-  const warehouse = warehouses[i % warehouses.length];
-  const condition = conditions[i % conditions.length];
-  // Generate realistic SKUs based on brand and product type
-  const brandCodes = { "Milwaukee": "MIL", "DeWalt": "DWT", "Makita": "MAK" };
-  const brandName = brandNames[i % 3];
-  const productNumber = String(10000 + i * 47).slice(-4); // More realistic product numbers
-  const conditionSuffix = { "New": "AA", "Refurbished": "RF", "Open Box": "OB" };
-  const actualSku = `${brandCodes[brandName]}${productNumber}-${conditionSuffix[condition.general_condition]}`;
-  
-  return {
-    id: `mock-uuid-${i + 1}`,
-    // Customer-facing information
-    description: `${brandName} ${typeNames[i % typeNames.length]} - Professional Grade`,
-    sku: actualSku, // Use the realistic SKU
-    image_url: null,
-    condition_id: condition.id,
-    product_type_id: (i % 5) + 1,
-    brand_id: (i % 3) + 1,
-    power_source: powerSources[i % powerSources.length],
-    specs: `Weight: ${2 + (i % 5)}lbs, Power: ${18 + (i % 12)}V, Max Torque: ${300 + (i * 25)}in-lbs`,
-    
-    // Derived fields for display (from JOINs)
-    brand_name: brandName,
-    condition_name: condition.general_condition,
-    condition_description: condition.full_description,
-    product_type_name: typeNames[i % typeNames.length],
-    
-    // Inventory information
-    quantity: Math.floor(Math.random() * 10) + 1, // 1-10 in stock
-    warehouse_location: warehouse.id,
-    warehouse_name: warehouse.name,
-    
-    // Always in stock since we only show available items
-    in_stock: true,
-    
-    // Customer pricing
-    price: Math.floor(Math.random() * 300 + 50) + 0.99,
-  };
-});
-
-const BRAND_OPTIONS = ["Milwaukee", "DeWalt", "Makita"]; // You'll get these from your brands table
-const CONDITION_OPTIONS = ["New", "Refurbished", "Open Box"]; // You'll get these from your conditions table
-const POWER_SOURCE_OPTIONS = ["Cordless", "Corded", "Battery", "Gas"];
-const LOCATION_OPTIONS = [
-  { id: "WH001", name: "Downtown Warehouse" },
-  { id: "WH002", name: "North Location" },
-  { id: "WH003", name: "South Depot" }
-]; // You'll get these from your warehouse table
+import { getProducts, getBrands, getConditions, getWarehouses, getPowerSources } from "../lib/supabase";
 
 export default function CategoryPage({ title = "Power Tools" }) {
+  // Data state
+  const [products, setProducts] = useState([]);
+  const [brands, setBrands] = useState([]);
+  const [conditions, setConditions] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
+  const [powerSources, setPowerSources] = useState([]);
+  
+  // Loading states
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   // Filters
   const [selectedBrands, setSelectedBrands] = useState(new Set());
   const [selectedConditions, setSelectedConditions] = useState(new Set());
   const [selectedPowerSources, setSelectedPowerSources] = useState(new Set());
   const [selectedLocations, setSelectedLocations] = useState(new Set());
+  const [selectedProductTypes, setSelectedProductTypes] = useState(new Set());
+  
+  // Filter dropdown states (which sections are expanded)
+  const [expandedSections, setExpandedSections] = useState(new Set(['brands'])); // Start with brands expanded
 
   // Sorting
   const [sort, setSort] = useState("relevance"); // relevance | price_asc | price_desc | newest
 
+  // Load data on mount
+  useEffect(() => {
+    async function loadData() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        // Load all data in parallel
+        const [
+          productsResult,
+          brandsResult,
+          conditionsResult,
+          warehousesResult,
+          powerSourcesResult
+        ] = await Promise.all([
+          getProducts(),
+          getBrands(),
+          getConditions(),
+          getWarehouses(),
+          getPowerSources()
+        ]);
+
+        if (!productsResult.success) {
+          throw new Error(`Products: ${productsResult.error}`);
+        }
+        if (!brandsResult.success) {
+          throw new Error(`Brands: ${brandsResult.error}`);
+        }
+        if (!conditionsResult.success) {
+          throw new Error(`Conditions: ${conditionsResult.error}`);
+        }
+        if (!warehousesResult.success) {
+          throw new Error(`Warehouses: ${warehousesResult.error}`);
+        }
+        if (!powerSourcesResult.success) {
+          throw new Error(`Power Sources: ${powerSourcesResult.error}`);
+        }
+
+        setProducts(productsResult.data);
+        setBrands(brandsResult.data);
+        setConditions(conditionsResult.data);
+        setWarehouses(warehousesResult.data);
+        setPowerSources(powerSourcesResult.data);
+      } catch (err) {
+        setError(err.message);
+        console.error("Error loading category page data:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadData();
+  }, []);
+
   const filteredProducts = useMemo(() => {
-    let items = [...MOCK_PRODUCTS];
+    let items = [...products];
 
     // Brand filter (using brand_name from JOIN)
     if (selectedBrands.size > 0) {
@@ -95,12 +96,20 @@ export default function CategoryPage({ title = "Power Tools" }) {
 
     // Power source filter
     if (selectedPowerSources.size > 0) {
-      items = items.filter((p) => selectedPowerSources.has(p.power_source));
+      items = items.filter((p) => {
+        if (!p.power_source) return false;
+        return selectedPowerSources.has(p.power_source);
+      });
     }
 
     // Location filter
     if (selectedLocations.size > 0) {
       items = items.filter((p) => selectedLocations.has(p.warehouse_location));
+    }
+
+    // Product Type filter
+    if (selectedProductTypes.size > 0) {
+      items = items.filter((p) => selectedProductTypes.has(p.product_type_name));
     }
 
     // Sorting
@@ -109,12 +118,12 @@ export default function CategoryPage({ title = "Power Tools" }) {
     } else if (sort === "price_desc") {
       items.sort((a, b) => b.price - a.price);
     } else if (sort === "newest") {
-      // Mock: higher id = newer
-      items.sort((a, b) => b.id - a.id);
+      // Sort by creation date if available, otherwise by ID
+      items.sort((a, b) => new Date(b.created_at || b.id) - new Date(a.created_at || a.id));
     } // relevance = keep original order
 
     return items;
-  }, [selectedBrands, selectedConditions, selectedPowerSources, selectedLocations, sort]);
+  }, [products, selectedBrands, selectedConditions, selectedPowerSources, selectedLocations, selectedProductTypes, sort]);
 
   const shownProducts = filteredProducts.slice(0, 12);
 
@@ -125,11 +134,19 @@ export default function CategoryPage({ title = "Power Tools" }) {
     setSetter(next);
   };
 
+  const toggleSection = (sectionId) => {
+    const next = new Set(expandedSections);
+    if (next.has(sectionId)) next.delete(sectionId);
+    else next.add(sectionId);
+    setExpandedSections(next);
+  };
+
   const clearFilters = () => {
     setSelectedBrands(new Set());
     setSelectedConditions(new Set());
     setSelectedPowerSources(new Set());
     setSelectedLocations(new Set());
+    setSelectedProductTypes(new Set());
     setSort("relevance");
   };
 
@@ -140,14 +157,15 @@ export default function CategoryPage({ title = "Power Tools" }) {
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">{title}</h1>
           <p className="mt-1 text-sm text-makmex-muted">
-            Showing {filteredProducts.length} results
+            {loading ? "Loading..." : `Showing ${filteredProducts.length} results`}
           </p>
         </div>
 
         <select
           value={sort}
           onChange={(e) => setSort(e.target.value)}
-          className="rounded-xl border border-makmex-border bg-makmex-surface px-3 py-2 text-sm"
+          disabled={loading}
+          className="rounded-xl border border-makmex-border bg-makmex-surface px-3 py-2 text-sm disabled:opacity-50"
         >
           <option value="relevance">Sort by relevance</option>
           <option value="price_asc">Price: Low to High</option>
@@ -156,111 +174,221 @@ export default function CategoryPage({ title = "Power Tools" }) {
         </select>
       </div>
 
-      {/* Sidebar and Content Layout */}
-      <div className="flex gap-6">
-        {/* Filters Sidebar */}
-        <aside className="w-64 flex-shrink-0">
-          <div className="sticky top-6 rounded-2xl border border-makmex-border bg-makmex-surface p-4">
-            <h2 className="mb-4 font-bold">Filters</h2>
-
-            <div className="space-y-4 text-sm text-makmex-text">
-              <FilterGroup title="Brand">
-                {BRAND_OPTIONS.map((b) => (
-                  <Check
-                    key={b}
-                    label={b}
-                    checked={selectedBrands.has(b)}
-                    onChange={() =>
-                      toggleSetValue(setSelectedBrands, selectedBrands, b)
-                    }
-                  />
-                ))}
-              </FilterGroup>
-
-              <FilterGroup title="Condition">
-                {CONDITION_OPTIONS.map((c) => (
-                  <Check
-                    key={c}
-                    label={c}
-                    checked={selectedConditions.has(c)}
-                    onChange={() =>
-                      toggleSetValue(setSelectedConditions, selectedConditions, c)
-                    }
-                  />
-                ))}
-              </FilterGroup>
-
-              <FilterGroup title="Power Source">
-                {POWER_SOURCE_OPTIONS.map((ps) => (
-                  <Check
-                    key={ps}
-                    label={ps}
-                    checked={selectedPowerSources.has(ps)}
-                    onChange={() =>
-                      toggleSetValue(setSelectedPowerSources, selectedPowerSources, ps)
-                    }
-                  />
-                ))}
-              </FilterGroup>
-
-              <FilterGroup title="Location">
-                {LOCATION_OPTIONS.map((loc) => (
-                  <Check
-                    key={loc.id}
-                    label={loc.name}
-                    checked={selectedLocations.has(loc.id)}
-                    onChange={() =>
-                      toggleSetValue(setSelectedLocations, selectedLocations, loc.id)
-                    }
-                  />
-                ))}
-              </FilterGroup>
-
-              <button
-                onClick={clearFilters}
-                className="mt-4 w-full rounded-xl border border-makmex-border bg-makmex-panel px-3 py-2 text-sm font-semibold text-makmex-muted hover:border-makmex-orange/60 hover:text-makmex-text"
-              >
-                Clear filters
-              </button>
-            </div>
-          </div>
-        </aside>
-
-        {/* Main Content */}
-        <div className="flex-1">
-          {/* Product Grid */}
-          <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {shownProducts.map((p) => (
-              <ProductCard key={p.id} {...p} />
-            ))}
-          </section>
-        </div>
-      </div>
-
-      {/* Pagination placeholder (next step we’ll make it real) */}
-      <div className="flex justify-center gap-2 pt-2">
-        {["1", "2", "3", "Next"].map((p) => (
+      {/* Error State */}
+      {error && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
+          <h3 className="text-lg font-semibold text-red-800">Error Loading Products</h3>
+          <p className="mt-2 text-sm text-red-600">{error}</p>
           <button
-            key={p}
-            className="rounded-xl border border-makmex-border bg-makmex-surface px-4 py-2 text-sm font-semibold text-makmex-muted hover:border-makmex-orange hover:text-makmex-text"
+            onClick={() => window.location.reload()}
+            className="mt-4 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
           >
-            {p}
+            Retry
           </button>
-        ))}
-      </div>
+        </div>
+      )}
+
+      {/* Loading State */}
+      {loading && (
+        <div className="flex justify-center py-12">
+          <div className="flex items-center gap-2 text-makmex-muted">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-makmex-orange border-t-transparent"></div>
+            Loading products...
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      {!loading && !error && (
+        <div className="flex gap-6">
+          {/* Filters Sidebar */}
+          <aside className="w-64 flex-shrink-0">
+            <div className="sticky top-6 rounded-2xl border border-makmex-border bg-makmex-surface p-4">
+              <h2 className="mb-4 font-bold">Filters</h2>
+
+              <div className="space-y-4 text-sm text-makmex-text">
+                <FilterGroup 
+                  title="Brand" 
+                  sectionId="brands"
+                  isExpanded={expandedSections.has('brands')}
+                  onToggle={() => toggleSection('brands')}
+                  selectedCount={selectedBrands.size}
+                >
+                  {brands.map((brand) => (
+                    <Check
+                      key={brand.id}
+                      label={brand.name}
+                      checked={selectedBrands.has(brand.name)}
+                      onChange={() =>
+                        toggleSetValue(setSelectedBrands, selectedBrands, brand.name)
+                      }
+                    />
+                  ))}
+                </FilterGroup>
+
+                <FilterGroup 
+                  title="Condition" 
+                  sectionId="conditions"
+                  isExpanded={expandedSections.has('conditions')}
+                  onToggle={() => toggleSection('conditions')}
+                  selectedCount={selectedConditions.size}
+                >
+                  {conditions.map((condition) => (
+                    <Check
+                      key={condition.id}
+                      label={condition.general_condition}
+                      checked={selectedConditions.has(condition.general_condition)}
+                      onChange={() =>
+                        toggleSetValue(setSelectedConditions, selectedConditions, condition.general_condition)
+                      }
+                    />
+                  ))}
+                </FilterGroup>
+
+                <FilterGroup 
+                  title="Product Type" 
+                  sectionId="productTypes"
+                  isExpanded={expandedSections.has('productTypes')}
+                  onToggle={() => toggleSection('productTypes')}
+                  selectedCount={selectedProductTypes.size}
+                >
+                  {conditions.length > 0 && (
+                    <>
+                      {Array.from(new Set(products.map(p => p.product_type_name))).sort().map((productType) => (
+                        <Check
+                          key={productType}
+                          label={productType}
+                          checked={selectedProductTypes.has(productType)}
+                          onChange={() =>
+                            toggleSetValue(setSelectedProductTypes, selectedProductTypes, productType)
+                          }
+                        />
+                      ))}
+                    </>
+                  )}
+                </FilterGroup>
+
+                <FilterGroup 
+                  title="Power Source" 
+                  sectionId="powerSources"
+                  isExpanded={expandedSections.has('powerSources')}
+                  onToggle={() => toggleSection('powerSources')}
+                  selectedCount={selectedPowerSources.size}
+                >
+                  {powerSources.map((powerSource) => (
+                    <Check
+                      key={powerSource.value || powerSource}
+                      label={powerSource.display || powerSource}
+                      checked={selectedPowerSources.has(powerSource.value || powerSource)}
+                      onChange={() =>
+                        toggleSetValue(setSelectedPowerSources, selectedPowerSources, powerSource.value || powerSource)
+                      }
+                    />
+                  ))}
+                </FilterGroup>
+
+                <FilterGroup 
+                  title="Location" 
+                  sectionId="locations"
+                  isExpanded={expandedSections.has('locations')}
+                  onToggle={() => toggleSection('locations')}
+                  selectedCount={selectedLocations.size}
+                >
+                  {warehouses.map((warehouse) => (
+                    <Check
+                      key={warehouse.id}
+                      label={warehouse.name}
+                      checked={selectedLocations.has(warehouse.id)}
+                      onChange={() =>
+                        toggleSetValue(setSelectedLocations, selectedLocations, warehouse.id)
+                      }
+                    />
+                  ))}
+                </FilterGroup>
+
+                <button
+                  onClick={clearFilters}
+                  className="mt-4 w-full rounded-xl border border-makmex-border bg-makmex-panel px-3 py-2 text-sm font-semibold text-makmex-muted hover:border-makmex-orange/60 hover:text-makmex-text"
+                >
+                  Clear filters
+                </button>
+              </div>
+            </div>
+          </aside>
+
+          {/* Product Grid */}
+          <div className="flex-1">
+            {shownProducts.length === 0 ? (
+              <div className="rounded-2xl border border-makmex-border bg-makmex-surface p-12 text-center">
+                <h3 className="text-lg font-semibold text-makmex-text">No products found</h3>
+                <p className="mt-2 text-sm text-makmex-muted">
+                  Try adjusting your filters or check back later for new inventory.
+                </p>
+              </div>
+            ) : (
+              <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {shownProducts.map((product) => (
+                  <ProductCard key={product.id} {...product} />
+                ))}
+              </section>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Pagination placeholder (when not loading and has products) */}
+      {!loading && !error && shownProducts.length > 0 && (
+        <div className="flex justify-center gap-2 pt-2">
+          {["1", "2", "3", "Next"].map((p) => (
+            <button
+              key={p}
+              className="rounded-xl border border-makmex-border bg-makmex-surface px-4 py-2 text-sm font-semibold text-makmex-muted hover:border-makmex-orange hover:text-makmex-text"
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 /* ---------------- Helpers ---------------- */
 
-function FilterGroup({ title, children }) {
+function FilterGroup({ title, children, sectionId, isExpanded, onToggle, selectedCount }) {
   return (
-    <div>
-      <div className="mb-2 text-xs font-bold uppercase tracking-wide text-makmex-muted">
-        {title}
-      </div>
-      <div className="space-y-2">{children}</div>
+    <div className="border border-makmex-border rounded-xl bg-makmex-panel">
+      {/* Header - Always visible */}
+      <button 
+        onClick={onToggle}
+        className="w-full flex items-center justify-between p-3 text-left hover:bg-makmex-surface transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold uppercase tracking-wide text-makmex-muted">
+            {title}
+          </span>
+          {selectedCount > 0 && (
+            <span className="bg-makmex-orange text-black text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+              {selectedCount}
+            </span>
+          )}
+        </div>
+        <svg 
+          className={`w-4 h-4 text-makmex-muted transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      
+      {/* Content - Collapsible */}
+      {isExpanded && (
+        <div className="px-3 pb-3 space-y-2 max-h-48 overflow-y-auto">
+          {children}
+        </div>
+      )}
     </div>
   );
 }
