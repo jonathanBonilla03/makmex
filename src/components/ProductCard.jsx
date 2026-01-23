@@ -56,7 +56,9 @@ export default function ProductCard({
       <h3 className="mt-1 text-sm font-bold leading-snug line-clamp-2">{description}</h3>
       <div className="mt-0.5 text-xs text-makmex-muted space-y-1">
         {display_sku && <p><span className="font-medium">SKU:</span> {display_sku}</p>}
-        {power_source && power_source !== 'none' && <p>Power: {power_source === 'none' ? 'No Power Source' : power_source}</p>}
+        {power_source && power_source !== 'none' && (
+          <p>Power: {power_source === 'none' ? 'No Power Source' : power_source === 'cable' ? 'Cable' : power_source}</p>
+        )}
         {specs && <p className="line-clamp-1" title={specs}>Specs: {specs}</p>}
         {warehouse_location && <p>Location: {warehouse_location}</p>}
         {quantity > 0 && quantity <= 5 && (

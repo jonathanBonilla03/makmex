@@ -301,8 +301,53 @@ export async function getPowerSources() {
     // Map power sources to display names
     const powerSourcesWithDisplay = uniquePowerSources.map(ps => ({
       value: ps,
-      display: ps === 'none' ? 'No Power Source' : ps
+      display: ps === 'none' ? 'No Power Source' : 
+               ps === 'cable' ? 'Cable' : 
+               ps // Default: use as-is
     }))
+
+    // Custom sort: No Power Source first, then Cable, then voltage patterns (M_, _V), then alphabetical
+    powerSourcesWithDisplay.sort((a, b) => {
+      const aVal = a.value;
+      const bVal = b.value;
+      
+      // Priority order: none, cable, M_ patterns, _V patterns, then alphabetical
+      if (aVal === 'none') return -1;
+      if (bVal === 'none') return 1;
+      if (aVal === 'cable') return -1;
+      if (bVal === 'cable') return 1;
+      
+      // Check for M_ patterns (like M12, M18)
+      const aIsM = /^M\d+/.test(aVal);
+      const bIsM = /^M\d+/.test(bVal);
+      
+      // Check for _V patterns (like 12V, 18V, 20V)
+      const aIsV = /^\d+V?$/.test(aVal);
+      const bIsV = /^\d+V?$/.test(bVal);
+      
+      // Both are M_ patterns - sort by number
+      if (aIsM && bIsM) {
+        const aNum = parseInt(aVal.match(/\d+/)[0]);
+        const bNum = parseInt(bVal.match(/\d+/)[0]);
+        return aNum - bNum;
+      }
+      
+      // Both are _V patterns - sort by voltage number
+      if (aIsV && bIsV) {
+        const aNum = parseInt(aVal.match(/\d+/)[0]);
+        const bNum = parseInt(bVal.match(/\d+/)[0]);
+        return aNum - bNum;
+      }
+      
+      // M_ patterns come before _V patterns
+      if (aIsM && !bIsM) return -1;
+      if (!aIsM && bIsM) return 1;
+      if (aIsV && !bIsV && !bIsM) return -1;
+      if (!aIsV && bIsV && !aIsM) return 1;
+      
+      // Default alphabetical sort
+      return aVal.localeCompare(bVal);
+    });
 
     return { success: true, data: powerSourcesWithDisplay }
   } catch (err) {

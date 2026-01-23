@@ -294,16 +294,22 @@ export default function CategoryPage({ title = "Power Tools" }) {
                   onToggle={() => toggleSection('locations')}
                   selectedCount={selectedLocations.size}
                 >
-                  {warehouses.map((warehouse) => (
-                    <Check
-                      key={warehouse.id}
-                      label={warehouse.name}
-                      checked={selectedLocations.has(warehouse.id)}
-                      onChange={() =>
-                        toggleSetValue(setSelectedLocations, selectedLocations, warehouse.id)
-                      }
-                    />
-                  ))}
+                  {Array.from(new Set(products.map(p => p.warehouse_location).filter(Boolean))).sort().map((warehouseId) => {
+                    // Find the warehouse name for display
+                    const warehouse = warehouses.find(w => w.id === warehouseId);
+                    const displayName = warehouse ? `${warehouseId} - ${warehouse.name}` : warehouseId;
+                    
+                    return (
+                      <Check
+                        key={warehouseId}
+                        label={displayName}
+                        checked={selectedLocations.has(warehouseId)}
+                        onChange={() =>
+                          toggleSetValue(setSelectedLocations, selectedLocations, warehouseId)
+                        }
+                      />
+                    );
+                  })}
                 </FilterGroup>
 
                 <button
