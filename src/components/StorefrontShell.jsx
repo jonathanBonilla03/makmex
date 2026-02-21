@@ -159,7 +159,7 @@ export default function StorefrontShell({ children }) {
     <div className="min-h-screen bg-makmex-bg text-makmex-text">
       {/* Top promo bar */}
       <div className="border-b border-makmex-border bg-black/40">
-        <div className="mx-auto max-w-6xl px-4 py-2 text-center text-xs text-makmex-muted">
+        <div className="mx-auto max-w-7xl px-4 py-2 text-center text-xs text-makmex-muted">
           Up to 20% off kits this week • Free pickup in AZ • Fast shipping available
         </div>
       </div>
@@ -169,7 +169,7 @@ export default function StorefrontShell({ children }) {
           {/* Header */}
           <header className="sticky top-0 z-40 border-b border-makmex-border bg-makmex-bg/90 backdrop-blur">
         {/* Row 1 */}
-        <div className="mx-auto max-w-6xl px-4 py-3">
+        <div className="mx-auto max-w-7xl px-4 py-3">
           <div className="flex items-center gap-3">
             {/* Brand */}
             <div className="flex items-center gap-2">
@@ -223,7 +223,7 @@ export default function StorefrontShell({ children }) {
 
         {/* Row 2: Nav */}
         <div className="border-t border-makmex-border bg-black/30">
-          <nav className="mx-auto flex max-w-6xl items-center gap-1 px-4 py-2 text-sm">
+          <nav className="mx-auto flex max-w-7xl items-center gap-1 px-4 py-2 text-sm">
         
 {[
   { label: t('products'), to: "/products" },
@@ -252,7 +252,7 @@ export default function StorefrontShell({ children }) {
       </header>
 
       {/* Main content slot */}
-      <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
+      <main className="mx-auto max-w-7xl px-4 py-8">{children}</main>
       </div>
 
       {/* Cart Sidebar (out of layout flow) */}
