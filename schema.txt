@@ -45,3 +45,80 @@ warehouse
 | id          | text              | NO          | null           | null                     |
 | address     | character varying | YES         | null           | null                     |
 | name        | text              | YES         | null           | null                     |
+
+combos
+| column_name | data_type         | is_nullable | column_default    | character_maximum_length |
+| ----------- | ----------------- | ----------- | ----------------- | ------------------------ |
+| id          | uuid              | NO          | gen_random_uuid() | null                     |
+| name        | text              | NO          | null              | null                     |
+| description | text              | YES         | null              | null                     |
+| sku         | character varying | NO          | null              | 50                       |
+| image_url   | text              | YES         | null              | null                     |
+| brand_id    | integer           | YES         | null              | null                     |
+
+combo_price_calc
+| column_name | data_type | is_nullable | column_default | character_maximum_length |
+| ----------- | --------- | ----------- | -------------- | ------------------------ |
+| combo_id    | uuid      | YES         | null           | null                     |
+| combo_price | numeric   | YES         | null           | null                     |
+
+combo_items
+| column_name    | data_type | is_nullable | column_default    | character_maximum_length |
+| -------------- | --------- | ----------- | ----------------- | ------------------------ |
+| id             | uuid      | NO          | gen_random_uuid() | null                     |
+| combo_id       | uuid      | YES         | null              | null                     |
+| product_id     | uuid      | YES         | null              | null                     |
+| quantity       | integer   | YES         | 1                 | null                     |
+| condition      | text      | YES         | null              | null                     |
+| combo_discount | numeric   | YES         | 0                 | null                     |
+
+combo_availability
+| column_name          | data_type         | is_nullable | column_default | character_maximum_length |
+| -------------------- | ----------------- | ----------- | -------------- | ------------------------ |
+| warehouse_location   | text              | YES         | null           | null                     |
+| combo_id             | uuid              | YES         | null           | null                     |
+| combo_sku            | character varying | YES         | null           | 50                       |
+| combo_name           | text              | YES         | null           | null                     |
+| max_combos_available | integer           | YES         | null           | null                     |
+
+kits
+| column_name     | data_type         | is_nullable | column_default    | character_maximum_length |
+| --------------- | ----------------- | ----------- | ----------------- | ------------------------ |
+| id              | uuid              | NO          | gen_random_uuid() | null                     |
+| specs           | text              | NO          | null              | null                     |
+| description     | text              | YES         | null              | null                     |
+| sku             | character varying | NO          | null              | 50                       |
+| brand_id        | integer           | YES         | null              | null                     |
+| product_type_id | integer           | YES         | null              | null                     |
+
+kit_price_calc
+| column_name | data_type | is_nullable | column_default | character_maximum_length |
+| ----------- | --------- | ----------- | -------------- | ------------------------ |
+| kit_id      | uuid      | YES         | null           | null                     |
+| kit_price   | numeric   | YES         | null           | null                     |
+
+kit_items
+| column_name  | data_type | is_nullable | column_default    | character_maximum_length |
+| ------------ | --------- | ----------- | ----------------- | ------------------------ |
+| id           | uuid      | NO          | gen_random_uuid() | null                     |
+| kit_id       | uuid      | YES         | null              | null                     |
+| product_id   | uuid      | YES         | null              | null                     |
+| role         | text      | YES         | null              | null                     |
+| quantity     | integer   | YES         | 1                 | null                     |
+| kit_discount | numeric   | YES         | 0                 | null                     |
+
+kit_availability
+| column_name        | data_type | is_nullable | column_default | character_maximum_length |
+| ------------------ | --------- | ----------- | -------------- | ------------------------ |
+| warehouse_location | text      | YES         | null           | null                     |
+| kit_id             | uuid      | YES         | null           | null                     |
+| kit_name           | text      | YES         | null           | null                     |
+| max_kits_available | integer   | YES         | null           | null                     |
+
+prices
+| column_name | data_type | is_nullable | column_default    | character_maximum_length |
+| ----------- | --------- | ----------- | ----------------- | ------------------------ |
+| id          | uuid      | NO          | gen_random_uuid() | null                     |
+| product_id  | uuid      | YES         | null              | null                     |
+| created_at  | date      | YES         | null              | null                     |
+| price_aa    | numeric   | YES         | null              | null                     |

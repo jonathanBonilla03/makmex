@@ -3,6 +3,11 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import DatabaseConnectionWrapper from "./components/DatabaseConnectionWrapper"
 import StorefrontShell from "./components/StorefrontShell"
 import CategoryPage from "./pages/CategoryPage"
+import CombosPage from "./pages/CombosPage"
+import KitsPage from "./pages/KitsPage"
+import ItemDetailsPage from "./pages/ItemDetailsPage"
+import { CartProvider } from "./context/CartContext"
+import { LanguageProvider } from "./context/LanguageContext"
 
 function Placeholder({ title }) {
   return (
@@ -16,18 +21,23 @@ function Placeholder({ title }) {
 export default function App() {
   return (
     <DatabaseConnectionWrapper>
-      <BrowserRouter>
-        <StorefrontShell>
-          <Routes>
-            <Route path="/" element={<Navigate to="/products" replace />} />
-            <Route path="/products" element={<CategoryPage title="Products" />} />
-            <Route path="/combos" element={<CategoryPage title="Combos" />} />
-            <Route path="/kits" element={<CategoryPage title="Kits" />} />
-            <Route path="/brands" element={<Placeholder title="Brands" />} />
-            <Route path="/deals" element={<Placeholder title="Deals" />} />
-          </Routes>
-        </StorefrontShell>
-      </BrowserRouter>
+      <LanguageProvider>
+        <CartProvider>
+          <BrowserRouter>
+            <StorefrontShell>
+              <Routes>
+                <Route path="/" element={<Navigate to="/products" replace />} />
+                <Route path="/products" element={<CategoryPage title="Products" />} />
+                <Route path="/combos" element={<CombosPage title="Combos" />} />
+                <Route path="/kits" element={<KitsPage title="Kits" />} />
+                <Route path="/item/:type/:id" element={<ItemDetailsPage />} />
+                <Route path="/brands" element={<Placeholder title="Brands" />} />
+                <Route path="/deals" element={<Placeholder title="Deals" />} />
+              </Routes>
+            </StorefrontShell>
+          </BrowserRouter>
+        </CartProvider>
+      </LanguageProvider>
     </DatabaseConnectionWrapper>
   )
 }
