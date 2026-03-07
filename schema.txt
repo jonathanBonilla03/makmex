@@ -122,3 +122,13 @@ prices
 | product_id  | uuid      | YES         | null              | null                     |
 | created_at  | date      | YES         | null              | null                     |
 | price_aa    | numeric   | YES         | null              | null                     |
+
+product_images
+| column_name | data_type | is_nullable | column_default         | character_maximum_length |
+| ----------- | --------- | ----------- | ---------------------- | ------------------------ |
+| id          | uuid      | NO          | gen_random_uuid()      | null                     |
+| product_id  | uuid      | NO          | null                   | null                     |
+| bucket      | text      | NO          | 'product-images'::text | null                     |
+| path        | text      | NO          | null                   | null                     |
+| sort_order  | integer   | NO          | 0                      | null                     |
+| is_primary  | boolean   | NO          | false                  | null                     |

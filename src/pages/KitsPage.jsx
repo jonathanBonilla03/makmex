@@ -20,13 +20,18 @@ export default function KitsPage({ title = "Kits" }) {
   const [selectedConditions, setSelectedConditions] = useState(new Set());
   const [selectedLocations, setSelectedLocations] = useState(new Set());
   const [selectedProductTypes, setSelectedProductTypes] = useState(new Set());
+  const [showOnlyWithImages, setShowOnlyWithImages] = useState(false);
   // Price range filter
   const [priceRange, setPriceRange] = useState({ min: 0, max: 1000 });
   const [priceInputs, setPriceInputs] = useState({ min: '', max: '' });
   const [brandFilterMode, setBrandFilterMode] = useState('inclusive');
 
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(12);
+
   // Sorting
-  const [sort, setSort] = useState("relevance"); // relevance | price_asc | price_desc | newest
+  const [sort, setSort] = useState("relevance");
 
   // Load data on mount
   useEffect(() => {
@@ -168,18 +173,24 @@ export default function KitsPage({ title = "Kits" }) {
       items = items.filter((k) => selectedProductTypes.has(k.product_type_name));
     }
 
+    // Use precomputed image presence from backend (same precedence as ItemDetailsPage).
+    if (showOnlyWithImages) {
+      items = items.filter((k) => {
+        return Boolean(k.has_images || k.image_url || k.primary_image?.signed_url);
+      });
+    }
+
     // Sorting
     if (sort === "price_asc") {
       items.sort((a, b) => a.price - b.price);
     } else if (sort === "price_desc") {
       items.sort((a, b) => b.price - a.price);
     } else if (sort === "newest") {
-      // Sort by creation date if available, otherwise by ID
       items.sort((a, b) => new Date(b.created_at || b.id) - new Date(a.created_at || a.id));
-    } // relevance = keep original order
+    }
 
     return items;
-  }, [kits, selectedBrands, selectedConditions, selectedLocations, selectedProductTypes, sort, priceInputs, brandFilterMode]);
+  }, [kits, selectedBrands, selectedConditions, selectedLocations, selectedProductTypes, sort, priceInputs, brandFilterMode, showOnlyWithImages]);
 
   // Calculate available filter options based on current kits in stock
   const availableFilterOptions = useMemo(() => {
@@ -219,7 +230,37 @@ export default function KitsPage({ title = "Kits" }) {
     };
   }, [kits, conditions]);
 
-  const shownKits = filteredKits.slice(0, 12);
+  // Pagination calculations
+  const totalItems = filteredKits.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentItems = filteredKits.slice(startIndex, endIndex);
+  
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedBrands, selectedConditions, selectedLocations, selectedProductTypes, sort, priceInputs, brandFilterMode, showOnlyWithImages]);
+  
+  // Pagination handlers
+  const goToPage = (page) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
+  
+  const goToPreviousPage = () => {
+    setCurrentPage(prev => Math.max(1, prev - 1));
+  };
+  
+  const goToNextPage = () => {
+    setCurrentPage(prev => Math.min(totalPages, prev + 1));
+  };
+  
+  const handleItemsPerPageChange = (newItemsPerPage) => {
+    setItemsPerPage(newItemsPerPage);
+    setCurrentPage(1);
+  };
+
+  const shownKits = currentItems;
 
   // Filter handlers
   const handleBrandChange = (brand) => {
@@ -275,6 +316,7 @@ export default function KitsPage({ title = "Kits" }) {
     setSelectedConditions(new Set());
     setSelectedLocations(new Set());
     setSelectedProductTypes(new Set());
+    setShowOnlyWithImages(false);
     setPriceInputs({ min: priceRange.min.toString(), max: priceRange.max.toString() });
   };
 
@@ -301,12 +343,58 @@ export default function KitsPage({ title = "Kits" }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t('kits')}</h1>
-        <div className="text-sm text-makmex-muted">
-          {filteredKits.length} {filteredKits.length === 1 ? t('item') : t('items')} {t('available')}
+      {/* Header */}
+      <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">{t('kits')}</h1>
+          <p className="mt-1 text-sm text-makmex-muted">
+            Showing {startIndex + 1}-{Math.min(endIndex, totalItems)} of {totalItems} results
+          </p>
+        </div>
+
+        <div className="flex items-center gap-4">
+          {/* Items per page selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-makmex-muted">Show:</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+              className="rounded-lg border border-makmex-border bg-makmex-surface px-3 py-2 text-sm font-semibold text-makmex-text focus:border-makmex-orange focus:outline-none"
+            >
+              <option value={6}>6 per page</option>
+              <option value={12}>12 per page</option>
+              <option value={24}>24 per page</option>
+              <option value={48}>48 per page</option>
+            </select>
+          </div>
+
+          {/* Sorting */}
+          <div className="relative">
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+              className="rounded-lg border border-makmex-border bg-makmex-surface px-3 py-2 text-sm"
+            >
+              <option value="relevance">{t('relevance')}</option>
+              <option value="price_asc">{t('priceLowToHigh')}</option>
+              <option value="price_desc">{t('priceHighToLow')}</option>
+              <option value="newest">{t('newestFirst')}</option>
+            </select>
+          </div>
         </div>
       </div>
+
+      {/* Top Pagination */}
+      {totalPages > 1 && (
+        <PaginationControls 
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          onPageChange={goToPage}
+          onPreviousPage={goToPreviousPage}
+          onNextPage={goToNextPage}
+        />
+      )}
 
       <div className="flex gap-6">
         {/* Filters Sidebar */}
@@ -327,32 +415,19 @@ export default function KitsPage({ title = "Kits" }) {
             setBrandFilterMode={setBrandFilterMode}
             availableFilterOptions={availableFilterOptions}
             clearAllFilters={clearAllFilters}
+            showOnlyWithImages={showOnlyWithImages}
+            setShowOnlyWithImages={setShowOnlyWithImages}
           />
         </aside>
 
         {/* Main Content */}
         <div className="flex-1">
-          {/* Sort Controls */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-makmex-muted">{t('sortBy')}</span>
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value)}
-                className="rounded-lg border border-makmex-border bg-makmex-surface px-3 py-2 text-sm"
-              >
-                <option value="relevance">{t('relevance')}</option>
-                <option value="price_asc">{t('priceLowToHigh')}</option>
-                <option value="price_desc">{t('priceHighToLow')}</option>
-                <option value="newest">{t('newestFirst')}</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Kits Grid */}
           {shownKits.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="text-makmex-muted">No {t('kits').toLowerCase()} match your {t('filters').toLowerCase()}</div>
+            <div className="rounded-2xl border border-makmex-border bg-makmex-surface p-12 text-center">
+              <h3 className="text-lg font-semibold text-makmex-text">No kits found</h3>
+              <p className="mt-2 text-sm text-makmex-muted">
+                Try adjusting your filters or check back later for new inventory.
+              </p>
             </div>
           ) : (
             <div className="grid gap-6 xl:grid-cols-3 lg:grid-cols-2 md:grid-cols-2 sm:grid-cols-1">
@@ -362,6 +437,128 @@ export default function KitsPage({ title = "Kits" }) {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Bottom Pagination */}
+      {totalPages > 1 && (
+        <PaginationControls 
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          onPageChange={goToPage}
+          onPreviousPage={goToPreviousPage}
+          onNextPage={goToNextPage}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ---------------- Helpers ---------------- */
+
+function PaginationControls({ currentPage, totalPages, totalItems, onPageChange, onPreviousPage, onNextPage }) {
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxPagesToShow = 5;
+    
+    if (totalPages <= maxPagesToShow) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      pages.push(1);
+      
+      let startPage = Math.max(2, currentPage - 1);
+      let endPage = Math.min(totalPages - 1, currentPage + 1);
+      
+      if (currentPage <= 3) {
+        startPage = 2;
+        endPage = Math.min(4, totalPages - 1);
+      }
+      
+      if (currentPage >= totalPages - 2) {
+        startPage = Math.max(2, totalPages - 3);
+        endPage = totalPages - 1;
+      }
+      
+      if (startPage > 2) {
+        pages.push('...');
+      }
+      
+      for (let i = startPage; i <= endPage; i++) {
+        if (i > 1 && i < totalPages) {
+          pages.push(i);
+        }
+      }
+      
+      if (endPage < totalPages - 1) {
+        pages.push('...');
+      }
+      
+      if (totalPages > 1) {
+        pages.push(totalPages);
+      }
+    }
+    
+    return pages;
+  };
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-6">
+      <p className="text-sm text-makmex-muted">
+        Page {currentPage} of {totalPages} ({totalItems} total items)
+      </p>
+      
+      <div className="flex items-center gap-2">
+        <button
+          onClick={onPreviousPage}
+          disabled={currentPage === 1}
+          className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+            currentPage === 1
+              ? 'bg-makmex-surface text-makmex-muted cursor-not-allowed border border-makmex-border'
+              : 'bg-makmex-panel text-makmex-text hover:bg-makmex-orange hover:text-black border border-makmex-border hover:border-makmex-orange'
+          }`}
+        >
+          Previous
+        </button>
+        
+        <div className="flex gap-1">
+          {getPageNumbers().map((page, index) => {
+            if (page === '...') {
+              return (
+                <span key={`ellipsis-${index}`} className="px-3 py-2 text-sm text-makmex-muted">
+                  ...
+                </span>
+              );
+            }
+            
+            return (
+              <button
+                key={page}
+                onClick={() => onPageChange(page)}
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+                  currentPage === page
+                    ? 'bg-makmex-orange text-black border border-makmex-orange'
+                    : 'bg-makmex-panel text-makmex-text hover:bg-makmex-orange hover:text-black border border-makmex-border hover:border-makmex-orange'
+                }`}
+              >
+                {page}
+              </button>
+            );
+          })}
+        </div>
+        
+        <button
+          onClick={onNextPage}
+          disabled={currentPage === totalPages}
+          className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+            currentPage === totalPages
+              ? 'bg-makmex-surface text-makmex-muted cursor-not-allowed border border-makmex-border'
+              : 'bg-makmex-panel text-makmex-text hover:bg-makmex-orange hover:text-black border border-makmex-border hover:border-makmex-orange'
+          }`}
+        >
+          Next
+        </button>
       </div>
     </div>
   );

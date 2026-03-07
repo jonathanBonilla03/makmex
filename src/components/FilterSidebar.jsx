@@ -13,10 +13,15 @@ export default function FilterSidebar({
   handleLocationChange,
   selectedProductTypes,
   handleProductTypeChange,
+  // FIXED: Added optional power sources support for products page
+  selectedPowerSources,
+  handlePowerSourceChange,
   brandFilterMode,
   setBrandFilterMode,
   availableFilterOptions,
-  clearAllFilters
+  clearAllFilters,
+  showOnlyWithImages,
+  setShowOnlyWithImages
 }) {
   const { t } = useLanguage();
   const [expandedSections, setExpandedSections] = useState(new Set(['brands']));
@@ -79,7 +84,7 @@ export default function FilterSidebar({
     <div className="space-y-2">
       {items.map((item) => (
         <label
-          key={typeof item === 'string' ? item : item.id}
+          key={typeof item === 'string' ? item : item.id || item.value}
           className="flex cursor-pointer items-center gap-3 text-sm text-makmex-muted hover:text-makmex-text leading-relaxed"
         >
           <input
@@ -170,31 +175,33 @@ export default function FilterSidebar({
       {/* Brands */}
       <FilterSection title={t('brands')} sectionKey="brands" selectedCount={selectedBrands.size}>
         <div className="space-y-3">
-          {/* Brand filter mode */}
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="brandFilterMode"
-                value="inclusive"
-                checked={brandFilterMode === 'inclusive'}
-                onChange={(e) => setBrandFilterMode(e.target.value)}
-                className="text-makmex-orange"
-              />
-              <span className="text-makmex-text">{t('anyBrand')}</span>
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="brandFilterMode"
-                value="exclusive"
-                checked={brandFilterMode === 'exclusive'}
-                onChange={(e) => setBrandFilterMode(e.target.value)}
-                className="text-makmex-orange"
-              />
-              <span className="text-makmex-text">{t('allBrands')}</span>
-            </label>
-          </div>
+          {/* Brand filter mode - only show if setBrandFilterMode is provided */}
+          {brandFilterMode && setBrandFilterMode && (
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="brandFilterMode"
+                  value="inclusive"
+                  checked={brandFilterMode === 'inclusive'}
+                  onChange={(e) => setBrandFilterMode(e.target.value)}
+                  className="text-makmex-orange"
+                />
+                <span className="text-makmex-text">{t('anyBrand')}</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="brandFilterMode"
+                  value="exclusive"
+                  checked={brandFilterMode === 'exclusive'}
+                  onChange={(e) => setBrandFilterMode(e.target.value)}
+                  className="text-makmex-orange"
+                />
+                <span className="text-makmex-text">{t('allBrands')}</span>
+              </label>
+            </div>
+          )}
           <CheckboxList
             items={availableFilterOptions.brands}
             selected={selectedBrands}
@@ -211,6 +218,22 @@ export default function FilterSidebar({
           selected={selectedConditions}
           onChange={handleConditionChange}
           getLabel={(condition) => condition.general_condition}
+        />
+      </FilterSection>
+      )}
+
+      {/* FIXED: Power Sources - Only show if provided (for products page) */}
+      {availableFilterOptions.powerSources && availableFilterOptions.powerSources.length > 0 && selectedPowerSources && handlePowerSourceChange && (
+      <FilterSection title={t('powerSources')} sectionKey="powerSources" selectedCount={selectedPowerSources.size}>
+        <CheckboxList
+          items={availableFilterOptions.powerSources}
+          selected={selectedPowerSources}
+          onChange={(item) => {
+            // Handle both string and object power sources
+            const value = typeof item === 'string' ? item : item.value || item;
+            handlePowerSourceChange(value);
+          }}
+          getLabel={(powerSource) => typeof powerSource === 'string' ? powerSource : (powerSource.display || powerSource.value || powerSource)}
         />
       </FilterSection>
       )}
@@ -236,6 +259,19 @@ export default function FilterSidebar({
         />
       </FilterSection>
       )}
+
+      {/* Images Filter */}
+      <div className="border-t border-makmex-border px-3 py-3">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showOnlyWithImages}
+            onChange={(e) => setShowOnlyWithImages(e.target.checked)}
+            className="h-4 w-4 rounded border-makmex-border bg-makmex-bg text-makmex-orange accent-makmex-orange"
+          />
+          <span className="text-sm font-medium text-makmex-text">{t('hasImages')}</span>
+        </label>
+      </div>
 
       <button
         onClick={clearAllFilters}

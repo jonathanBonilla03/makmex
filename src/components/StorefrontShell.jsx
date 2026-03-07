@@ -160,7 +160,7 @@ export default function StorefrontShell({ children }) {
       {/* Top promo bar */}
       <div className="border-b border-makmex-border bg-black/40">
         <div className="mx-auto max-w-7xl px-4 py-2 text-center text-xs text-makmex-muted">
-          Up to 20% off kits this week • Free pickup in AZ • Fast shipping available
+          {t('upToOff')} • {t('freePickup')} • {t('fastShipping')}
         </div>
       </div>
 
@@ -207,7 +207,7 @@ export default function StorefrontShell({ children }) {
                 className="relative flex items-center gap-2 rounded-2xl border border-makmex-border bg-makmex-surface px-3 py-2 hover:border-makmex-orange/60"
               >
                 <span className="text-sm font-medium text-makmex-text">
-                  {language === 'en' ? 'ES' : 'EN'}
+                  {language === 'en' ? 'EN' : 'ES'}
                 </span>
               </button>
               
@@ -245,7 +245,7 @@ export default function StorefrontShell({ children }) {
 
 
             <div className="ml-auto hidden text-xs text-makmex-muted md:block">
-              Arizona • Local pickup available
+              {t('arizonaLocation')} • {t('pickup')}
             </div>
           </nav>
         </div>
