@@ -689,6 +689,40 @@ export async function getKits() {
 }
 
 /**
+ * Add a new customer to the database
+ * @param {Object} customerData - Customer information
+ * @returns {Promise<{success: boolean, data?: any, error?: string}>}
+ */
+export async function addCustomer(customerData) {
+  try {
+    const { data, error } = await supabase
+      .from('customers')
+      .insert([{
+        name: customerData.name,
+        email: customerData.email,
+        phone_number: customerData.phone_number || null,
+        address: customerData.address,
+        city: customerData.city,
+        state: customerData.state || null,
+        country: customerData.country,
+        zip_code: customerData.zip_code
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error adding customer:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data };
+  } catch (err) {
+    console.error('Unexpected error adding customer:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
  * Get all brands
  * @returns {Promise<{success: boolean, data?: any[], error?: string}>}
  */

@@ -6,6 +6,7 @@ import CategoryPage from "./pages/CategoryPage"
 import CombosPage from "./pages/CombosPage"
 import KitsPage from "./pages/KitsPage"
 import ItemDetailsPage from "./pages/ItemDetailsPage"
+import CheckoutPage from "./pages/CheckoutPage"
 import { CartProvider } from "./context/CartContext"
 import { LanguageProvider } from "./context/LanguageContext"
 
@@ -33,6 +34,7 @@ export default function App() {
                 <Route path="/item/:type/:id" element={<ItemDetailsPage />} />
                 <Route path="/brands" element={<Placeholder title="Brands" />} />
                 <Route path="/deals" element={<Placeholder title="Deals" />} />
+                <Route path="/checkout" element={<CheckoutPage />} />
               </Routes>
             </StorefrontShell>
           </BrowserRouter>

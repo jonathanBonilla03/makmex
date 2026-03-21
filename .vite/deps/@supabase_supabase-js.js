@@ -259,7 +259,19 @@ var PostgrestBuilder = class {
   *
   * @example
   * ```ts
-  * import PostgrestQueryBuilder from '@supabase/postgrest-js'
+  * import { PostgrestQueryBuilder } from '@supabase/postgrest-js'
+  *
+  * const builder = new PostgrestQueryBuilder(
+  *   new URL('https://xyzcompany.supabase.co/rest/v1/users'),
+  *   { headers: new Headers({ apikey: 'public-anon-key' }) }
+  * )
+  * ```
+  *
+  * @category Database
+  *
+  * @example Example 1
+  * ```ts
+  * import { PostgrestQueryBuilder } from '@supabase/postgrest-js'
   *
   * const builder = new PostgrestQueryBuilder(
   *   new URL('https://xyzcompany.supabase.co/rest/v1/users'),
@@ -268,7 +280,7 @@ var PostgrestBuilder = class {
   * ```
   */
   constructor(builder) {
-    var _builder$shouldThrowO, _builder$isMaybeSingl;
+    var _builder$shouldThrowO, _builder$isMaybeSingl, _builder$urlLengthLim;
     this.shouldThrowOnError = false;
     this.method = builder.method;
     this.url = builder.url;
@@ -278,6 +290,7 @@ var PostgrestBuilder = class {
     this.shouldThrowOnError = (_builder$shouldThrowO = builder.shouldThrowOnError) !== null && _builder$shouldThrowO !== void 0 ? _builder$shouldThrowO : false;
     this.signal = builder.signal;
     this.isMaybeSingle = (_builder$isMaybeSingl = builder.isMaybeSingle) !== null && _builder$isMaybeSingl !== void 0 ? _builder$isMaybeSingl : false;
+    this.urlLengthLimit = (_builder$urlLengthLim = builder.urlLengthLimit) !== null && _builder$urlLengthLim !== void 0 ? _builder$urlLengthLim : 8e3;
     if (builder.fetch) this.fetch = builder.fetch;
     else this.fetch = fetch;
   }
@@ -286,6 +299,8 @@ var PostgrestBuilder = class {
   * throwing the error instead of returning it as part of a successful response.
   *
   * {@link https://github.com/supabase/supabase-js/issues/92}
+  *
+  * @category Database
   */
   throwOnError() {
     this.shouldThrowOnError = true;
@@ -293,12 +308,17 @@ var PostgrestBuilder = class {
   }
   /**
   * Set an HTTP header for the request.
+  *
+  * @category Database
   */
   setHeader(name, value) {
     this.headers = new Headers(this.headers);
     this.headers.set(name, value);
     return this;
   }
+  /**  *
+  * @category Database
+  */
   then(onfulfilled, onrejected) {
     var _this = this;
     if (this.schema === void 0) {
@@ -378,6 +398,8 @@ var PostgrestBuilder = class {
     if (!this.shouldThrowOnError) res = res.catch((fetchError) => {
       var _fetchError$name2;
       let errorDetails = "";
+      let hint = "";
+      let code = "";
       const cause = fetchError === null || fetchError === void 0 ? void 0 : fetchError.cause;
       if (cause) {
         var _cause$message, _cause$code, _fetchError$name, _cause$name;
@@ -394,12 +416,22 @@ ${cause.stack}`;
         var _fetchError$stack;
         errorDetails = (_fetchError$stack = fetchError === null || fetchError === void 0 ? void 0 : fetchError.stack) !== null && _fetchError$stack !== void 0 ? _fetchError$stack : "";
       }
+      const urlLength = this.url.toString().length;
+      if ((fetchError === null || fetchError === void 0 ? void 0 : fetchError.name) === "AbortError" || (fetchError === null || fetchError === void 0 ? void 0 : fetchError.code) === "ABORT_ERR") {
+        code = "";
+        hint = "Request was aborted (timeout or manual cancellation)";
+        if (urlLength > this.urlLengthLimit) hint += `. Note: Your request URL is ${urlLength} characters, which may exceed server limits. If selecting many fields, consider using views. If filtering with large arrays (e.g., .in('id', [many IDs])), consider using an RPC function to pass values server-side.`;
+      } else if ((cause === null || cause === void 0 ? void 0 : cause.name) === "HeadersOverflowError" || (cause === null || cause === void 0 ? void 0 : cause.code) === "UND_ERR_HEADERS_OVERFLOW") {
+        code = "";
+        hint = "HTTP headers exceeded server limits (typically 16KB)";
+        if (urlLength > this.urlLengthLimit) hint += `. Your request URL is ${urlLength} characters. If selecting many fields, consider using views. If filtering with large arrays (e.g., .in('id', [200+ IDs])), consider using an RPC function instead.`;
+      }
       return {
         error: {
           message: `${(_fetchError$name2 = fetchError === null || fetchError === void 0 ? void 0 : fetchError.name) !== null && _fetchError$name2 !== void 0 ? _fetchError$name2 : "FetchError"}: ${fetchError === null || fetchError === void 0 ? void 0 : fetchError.message}`,
           details: errorDetails,
-          hint: "",
-          code: ""
+          hint,
+          code
         },
         data: null,
         count: null,
@@ -414,6 +446,8 @@ ${cause.stack}`;
   *
   * @typeParam NewResult - The new result type to override with
   * @deprecated Use overrideTypes<yourType, { merge: false }>() method at the end of your call chain instead
+  *
+  * @category Database
   */
   returns() {
     return this;
@@ -439,6 +473,77 @@ ${cause.stack}`;
   *   .overrideTypes<{ id: number; name: string }, { merge: false }>()
   * ```
   * @returns A PostgrestBuilder instance with the new type
+  *
+  * @category Database
+  *
+  * @example Complete Override type of successful response
+  * ```ts
+  * const { data } = await supabase
+  *   .from('countries')
+  *   .select()
+  *   .overrideTypes<Array<MyType>, { merge: false }>()
+  * ```
+  *
+  * @exampleResponse Complete Override type of successful response
+  * ```ts
+  * let x: typeof data // MyType[]
+  * ```
+  *
+  * @example Complete Override type of object response
+  * ```ts
+  * const { data } = await supabase
+  *   .from('countries')
+  *   .select()
+  *   .maybeSingle()
+  *   .overrideTypes<MyType, { merge: false }>()
+  * ```
+  *
+  * @exampleResponse Complete Override type of object response
+  * ```ts
+  * let x: typeof data // MyType | null
+  * ```
+  *
+  * @example Partial Override type of successful response
+  * ```ts
+  * const { data } = await supabase
+  *   .from('countries')
+  *   .select()
+  *   .overrideTypes<Array<{ status: "A" | "B" }>>()
+  * ```
+  *
+  * @exampleResponse Partial Override type of successful response
+  * ```ts
+  * let x: typeof data // Array<CountryRowProperties & { status: "A" | "B" }>
+  * ```
+  *
+  * @example Partial Override type of object response
+  * ```ts
+  * const { data } = await supabase
+  *   .from('countries')
+  *   .select()
+  *   .maybeSingle()
+  *   .overrideTypes<{ status: "A" | "B" }>()
+  * ```
+  *
+  * @exampleResponse Partial Override type of object response
+  * ```ts
+  * let x: typeof data // CountryRowProperties & { status: "A" | "B" } | null
+  * ```
+  *
+  * @example Example 5
+  * ```typescript
+  * // Merge with existing types (default behavior)
+  * const query = supabase
+  *   .from('users')
+  *   .select()
+  *   .overrideTypes<{ custom_field: string }>()
+  *
+  * // Replace existing types completely
+  * const replaceQuery = supabase
+  *   .from('users')
+  *   .select()
+  *   .overrideTypes<{ id: number; name: string }, { merge: false }>()
+  * ```
   */
   overrideTypes() {
     return this;
@@ -453,6 +558,41 @@ var PostgrestTransformBuilder = class extends PostgrestBuilder {
   * `data`.
   *
   * @param columns - The columns to retrieve, separated by commas
+  *
+  * @category Database
+  *
+  * @example With `upsert()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .upsert({ id: 1, name: 'Han Solo' })
+  *   .select()
+  * ```
+  *
+  * @exampleSql With `upsert()`
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Han');
+  * ```
+  *
+  * @exampleResponse With `upsert()`
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 1,
+  *       "name": "Han Solo"
+  *     }
+  *   ],
+  *   "status": 201,
+  *   "statusText": "Created"
+  * }
+  * ```
   */
   select(columns) {
     let quoted = false;
@@ -482,6 +622,176 @@ var PostgrestTransformBuilder = class extends PostgrestBuilder {
   * its columns
   * @param options.foreignTable - Deprecated, use `options.referencedTable`
   * instead
+  *
+  * @category Database
+  *
+  * @example With `select()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .select('id, name')
+  *   .order('id', { ascending: false })
+  * ```
+  *
+  * @exampleSql With `select()`
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Luke'),
+  *   (2, 'Leia'),
+  *   (3, 'Han');
+  * ```
+  *
+  * @exampleResponse With `select()`
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 3,
+  *       "name": "Han"
+  *     },
+  *     {
+  *       "id": 2,
+  *       "name": "Leia"
+  *     },
+  *     {
+  *       "id": 1,
+  *       "name": "Luke"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @exampleDescription On a referenced table
+  * Ordering with `referencedTable` doesn't affect the ordering of the
+  * parent table.
+  *
+  * @example On a referenced table
+  * ```ts
+  *   const { data, error } = await supabase
+  *     .from('orchestral_sections')
+  *     .select(`
+  *       name,
+  *       instruments (
+  *         name
+  *       )
+  *     `)
+  *     .order('name', { referencedTable: 'instruments', ascending: false })
+  *
+  * ```
+  *
+  * @exampleSql On a referenced table
+  * ```sql
+  * create table
+  *   orchestral_sections (id int8 primary key, name text);
+  * create table
+  *   instruments (
+  *     id int8 primary key,
+  *     section_id int8 not null references orchestral_sections,
+  *     name text
+  *   );
+  *
+  * insert into
+  *   orchestral_sections (id, name)
+  * values
+  *   (1, 'strings'),
+  *   (2, 'woodwinds');
+  * insert into
+  *   instruments (id, section_id, name)
+  * values
+  *   (1, 1, 'harp'),
+  *   (2, 1, 'violin');
+  * ```
+  *
+  * @exampleResponse On a referenced table
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "name": "strings",
+  *       "instruments": [
+  *         {
+  *           "name": "violin"
+  *         },
+  *         {
+  *           "name": "harp"
+  *         }
+  *       ]
+  *     },
+  *     {
+  *       "name": "woodwinds",
+  *       "instruments": []
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @exampleDescription Order parent table by a referenced table
+  * Ordering with `referenced_table(col)` affects the ordering of the
+  * parent table.
+  *
+  * @example Order parent table by a referenced table
+  * ```ts
+  *   const { data, error } = await supabase
+  *     .from('instruments')
+  *     .select(`
+  *       name,
+  *       section:orchestral_sections (
+  *         name
+  *       )
+  *     `)
+  *     .order('section(name)', { ascending: true })
+  *
+  * ```
+  *
+  * @exampleSql Order parent table by a referenced table
+  * ```sql
+  * create table
+  *   orchestral_sections (id int8 primary key, name text);
+  * create table
+  *   instruments (
+  *     id int8 primary key,
+  *     section_id int8 not null references orchestral_sections,
+  *     name text
+  *   );
+  *
+  * insert into
+  *   orchestral_sections (id, name)
+  * values
+  *   (1, 'strings'),
+  *   (2, 'woodwinds');
+  * insert into
+  *   instruments (id, section_id, name)
+  * values
+  *   (1, 2, 'flute'),
+  *   (2, 1, 'violin');
+  * ```
+  *
+  * @exampleResponse Order parent table by a referenced table
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "name": "violin",
+  *       "orchestral_sections": {"name": "strings"}
+  *     },
+  *     {
+  *       "name": "flute",
+  *       "orchestral_sections": {"name": "woodwinds"}
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   order(column, { ascending = true, nullsFirst, foreignTable, referencedTable = foreignTable } = {}) {
     const key = referencedTable ? `${referencedTable}.order` : "order";
@@ -498,6 +808,95 @@ var PostgrestTransformBuilder = class extends PostgrestBuilder {
   * tables instead of the parent table
   * @param options.foreignTable - Deprecated, use `options.referencedTable`
   * instead
+  *
+  * @category Database
+  *
+  * @example With `select()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .select('name')
+  *   .limit(1)
+  * ```
+  *
+  * @exampleSql With `select()`
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Luke'),
+  *   (2, 'Leia'),
+  *   (3, 'Han');
+  * ```
+  *
+  * @exampleResponse With `select()`
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "name": "Luke"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @example On a referenced table
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('orchestral_sections')
+  *   .select(`
+  *     name,
+  *     instruments (
+  *       name
+  *     )
+  *   `)
+  *   .limit(1, { referencedTable: 'instruments' })
+  * ```
+  *
+  * @exampleSql On a referenced table
+  * ```sql
+  * create table
+  *   orchestral_sections (id int8 primary key, name text);
+  * create table
+  *   instruments (
+  *     id int8 primary key,
+  *     section_id int8 not null references orchestral_sections,
+  *     name text
+  *   );
+  *
+  * insert into
+  *   orchestral_sections (id, name)
+  * values
+  *   (1, 'strings');
+  * insert into
+  *   instruments (id, section_id, name)
+  * values
+  *   (1, 1, 'harp'),
+  *   (2, 1, 'violin');
+  * ```
+  *
+  * @exampleResponse On a referenced table
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "name": "strings",
+  *       "instruments": [
+  *         {
+  *           "name": "violin"
+  *         }
+  *       ]
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   limit(count, { foreignTable, referencedTable = foreignTable } = {}) {
     const key = typeof referencedTable === "undefined" ? "limit" : `${referencedTable}.limit`;
@@ -518,6 +917,45 @@ var PostgrestTransformBuilder = class extends PostgrestBuilder {
   * tables instead of the parent table
   * @param options.foreignTable - Deprecated, use `options.referencedTable`
   * instead
+  *
+  * @category Database
+  *
+  * @example With `select()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .select('name')
+  *   .range(0, 1)
+  * ```
+  *
+  * @exampleSql With `select()`
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Luke'),
+  *   (2, 'Leia'),
+  *   (3, 'Han');
+  * ```
+  *
+  * @exampleResponse With `select()`
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "name": "Luke"
+  *     },
+  *     {
+  *       "name": "Leia"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   range(from, to, { foreignTable, referencedTable = foreignTable } = {}) {
     const keyOffset = typeof referencedTable === "undefined" ? "offset" : `${referencedTable}.offset`;
@@ -530,6 +968,66 @@ var PostgrestTransformBuilder = class extends PostgrestBuilder {
   * Set the AbortSignal for the fetch request.
   *
   * @param signal - The AbortSignal to use for the fetch request
+  *
+  * @category Database
+  *
+  * @remarks
+  * You can use this to set a timeout for the request.
+  *
+  * @exampleDescription Aborting requests in-flight
+  * You can use an [`AbortController`](https://developer.mozilla.org/en-US/docs/Web/API/AbortController) to abort requests.
+  * Note that `status` and `statusText` don't mean anything for aborted requests as the request wasn't fulfilled.
+  *
+  * @example Aborting requests in-flight
+  * ```ts
+  * const ac = new AbortController()
+  *
+  * const { data, error } = await supabase
+  *   .from('very_big_table')
+  *   .select()
+  *   .abortSignal(ac.signal)
+  *
+  * // Abort the request after 100 ms
+  * setTimeout(() => ac.abort(), 100)
+  * ```
+  *
+  * @exampleResponse Aborting requests in-flight
+  * ```json
+  *   {
+  *     "error": {
+  *       "message": "AbortError: The user aborted a request.",
+  *       "details": "",
+  *       "hint": "The request was aborted locally via the provided AbortSignal.",
+  *       "code": ""
+  *     },
+  *     "status": 0,
+  *     "statusText": ""
+  *   }
+  *
+  * ```
+  *
+  * @example Set a timeout
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('very_big_table')
+  *   .select()
+  *   .abortSignal(AbortSignal.timeout(1000 /* ms *\/))
+  * ```
+  *
+  * @exampleResponse Set a timeout
+  * ```json
+  *   {
+  *     "error": {
+  *       "message": "FetchError: The user aborted a request.",
+  *       "details": "",
+  *       "hint": "",
+  *       "code": ""
+  *     },
+  *     "status": 400,
+  *     "statusText": "Bad Request"
+  *   }
+  *
+  * ```
   */
   abortSignal(signal) {
     this.signal = signal;
@@ -540,6 +1038,41 @@ var PostgrestTransformBuilder = class extends PostgrestBuilder {
   *
   * Query result must be one row (e.g. using `.limit(1)`), otherwise this
   * returns an error.
+  *
+  * @category Database
+  *
+  * @example With `select()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .select('name')
+  *   .limit(1)
+  *   .single()
+  * ```
+  *
+  * @exampleSql With `select()`
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Luke'),
+  *   (2, 'Leia'),
+  *   (3, 'Han');
+  * ```
+  *
+  * @exampleResponse With `select()`
+  * ```json
+  * {
+  *   "data": {
+  *     "name": "Luke"
+  *   },
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   single() {
     this.headers.set("Accept", "application/vnd.pgrst.object+json");
@@ -550,6 +1083,38 @@ var PostgrestTransformBuilder = class extends PostgrestBuilder {
   *
   * Query result must be zero or one row (e.g. using `.limit(1)`), otherwise
   * this returns an error.
+  *
+  * @category Database
+  *
+  * @example With `select()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .select()
+  *   .eq('name', 'Katniss')
+  *   .maybeSingle()
+  * ```
+  *
+  * @exampleSql With `select()`
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Luke'),
+  *   (2, 'Leia'),
+  *   (3, 'Han');
+  * ```
+  *
+  * @exampleResponse With `select()`
+  * ```json
+  * {
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   maybeSingle() {
     if (this.method === "GET") this.headers.set("Accept", "application/json");
@@ -559,6 +1124,41 @@ var PostgrestTransformBuilder = class extends PostgrestBuilder {
   }
   /**
   * Return `data` as a string in CSV format.
+  *
+  * @category Database
+  *
+  * @exampleDescription Return data as CSV
+  * By default, the data is returned in JSON format, but can also be returned as Comma Separated Values.
+  *
+  * @example Return data as CSV
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .select()
+  *   .csv()
+  * ```
+  *
+  * @exampleSql Return data as CSV
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Luke'),
+  *   (2, 'Leia'),
+  *   (3, 'Han');
+  * ```
+  *
+  * @exampleResponse Return data as CSV
+  * ```json
+  * {
+  *   "data": "id,name\n1,Luke\n2,Leia\n3,Han",
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   csv() {
     this.headers.set("Accept", "text/csv");
@@ -566,6 +1166,8 @@ var PostgrestTransformBuilder = class extends PostgrestBuilder {
   }
   /**
   * Return `data` as an object in [GeoJSON](https://geojson.org) format.
+  *
+  * @category Database
   */
   geojson() {
     this.headers.set("Accept", "application/geo+json");
@@ -595,6 +1197,76 @@ var PostgrestTransformBuilder = class extends PostgrestBuilder {
   *
   * @param options.format - The format of the output, can be `"text"` (default)
   * or `"json"`
+  *
+  * @category Database
+  *
+  * @exampleDescription Get the execution plan
+  * By default, the data is returned in TEXT format, but can also be returned as JSON by using the `format` parameter.
+  *
+  * @example Get the execution plan
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .select()
+  *   .explain()
+  * ```
+  *
+  * @exampleSql Get the execution plan
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Luke'),
+  *   (2, 'Leia'),
+  *   (3, 'Han');
+  * ```
+  *
+  * @exampleResponse Get the execution plan
+  * ```js
+  * Aggregate  (cost=33.34..33.36 rows=1 width=112)
+  *   ->  Limit  (cost=0.00..18.33 rows=1000 width=40)
+  *         ->  Seq Scan on characters  (cost=0.00..22.00 rows=1200 width=40)
+  * ```
+  *
+  * @exampleDescription Get the execution plan with analyze and verbose
+  * By default, the data is returned in TEXT format, but can also be returned as JSON by using the `format` parameter.
+  *
+  * @example Get the execution plan with analyze and verbose
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .select()
+  *   .explain({analyze:true,verbose:true})
+  * ```
+  *
+  * @exampleSql Get the execution plan with analyze and verbose
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Luke'),
+  *   (2, 'Leia'),
+  *   (3, 'Han');
+  * ```
+  *
+  * @exampleResponse Get the execution plan with analyze and verbose
+  * ```js
+  * Aggregate  (cost=33.34..33.36 rows=1 width=112) (actual time=0.041..0.041 rows=1 loops=1)
+  *   Output: NULL::bigint, count(ROW(characters.id, characters.name)), COALESCE(json_agg(ROW(characters.id, characters.name)), '[]'::json), NULLIF(current_setting('response.headers'::text, true), ''::text), NULLIF(current_setting('response.status'::text, true), ''::text)
+  *   ->  Limit  (cost=0.00..18.33 rows=1000 width=40) (actual time=0.005..0.006 rows=3 loops=1)
+  *         Output: characters.id, characters.name
+  *         ->  Seq Scan on public.characters  (cost=0.00..22.00 rows=1200 width=40) (actual time=0.004..0.005 rows=3 loops=1)
+  *               Output: characters.id, characters.name
+  * Query Identifier: -4730654291623321173
+  * Planning Time: 0.407 ms
+  * Execution Time: 0.119 ms
+  * ```
   */
   explain({ analyze = false, verbose = false, settings = false, buffers = false, wal = false, format = "text" } = {}) {
     var _this$headers$get;
@@ -614,6 +1286,8 @@ var PostgrestTransformBuilder = class extends PostgrestBuilder {
   * Rollback the query.
   *
   * `data` will still be returned, but the query is not committed.
+  *
+  * @category Database
   */
   rollback() {
     this.headers.append("Prefer", "tx=rollback");
@@ -624,6 +1298,38 @@ var PostgrestTransformBuilder = class extends PostgrestBuilder {
   *
   * @typeParam NewResult - The new result type to override with
   * @deprecated Use overrideTypes<yourType, { merge: false }>() method at the end of your call chain instead
+  *
+  * @category Database
+  *
+  * @remarks
+  * - Deprecated: use overrideTypes method instead
+  *
+  * @example Override type of successful response
+  * ```ts
+  * const { data } = await supabase
+  *   .from('countries')
+  *   .select()
+  *   .returns<Array<MyType>>()
+  * ```
+  *
+  * @exampleResponse Override type of successful response
+  * ```js
+  * let x: typeof data // MyType[]
+  * ```
+  *
+  * @example Override type of object response
+  * ```ts
+  * const { data } = await supabase
+  *   .from('countries')
+  *   .select()
+  *   .maybeSingle()
+  *   .returns<MyType>()
+  * ```
+  *
+  * @exampleResponse Override type of object response
+  * ```js
+  * let x: typeof data // MyType | null
+  * ```
   */
   returns() {
     return this;
@@ -633,6 +1339,8 @@ var PostgrestTransformBuilder = class extends PostgrestBuilder {
   * Only available in PostgREST v13+ and only works with PATCH and DELETE methods.
   *
   * @param value - The maximum number of rows that can be affected
+  *
+  * @category Database
   */
   maxAffected(value) {
     this.headers.append("Prefer", "handling=strict");
@@ -649,6 +1357,43 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   *
   * @param column - The column to filter on
   * @param value - The value to filter with
+  *
+  * @category Database
+  *
+  * @example With `select()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .select()
+  *   .eq('name', 'Leia')
+  * ```
+  *
+  * @exampleSql With `select()`
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Luke'),
+  *   (2, 'Leia'),
+  *   (3, 'Han');
+  * ```
+  *
+  * @exampleResponse With `select()`
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 2,
+  *       "name": "Leia"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   eq(column, value) {
     this.url.searchParams.append(column, `eq.${value}`);
@@ -659,6 +1404,47 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   *
   * @param column - The column to filter on
   * @param value - The value to filter with
+  *
+  * @category Database
+  *
+  * @example With `select()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .select()
+  *   .neq('name', 'Leia')
+  * ```
+  *
+  * @exampleSql With `select()`
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Luke'),
+  *   (2, 'Leia'),
+  *   (3, 'Han');
+  * ```
+  *
+  * @exampleResponse With `select()`
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 1,
+  *       "name": "Luke"
+  *     },
+  *     {
+  *       "id": 3,
+  *       "name": "Han"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   neq(column, value) {
     this.url.searchParams.append(column, `neq.${value}`);
@@ -669,6 +1455,47 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   *
   * @param column - The column to filter on
   * @param value - The value to filter with
+  *
+  * @category Database
+  *
+  * @exampleDescription With `select()`
+  * When using [reserved words](https://www.postgresql.org/docs/current/sql-keywords-appendix.html) for column names you need
+  * to add double quotes e.g. `.gt('"order"', 2)`
+  *
+  * @example With `select()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .select()
+  *   .gt('id', 2)
+  * ```
+  *
+  * @exampleSql With `select()`
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Luke'),
+  *   (2, 'Leia'),
+  *   (3, 'Han');
+  * ```
+  *
+  * @exampleResponse With `select()`
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 3,
+  *       "name": "Han"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   gt(column, value) {
     this.url.searchParams.append(column, `gt.${value}`);
@@ -679,6 +1506,47 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   *
   * @param column - The column to filter on
   * @param value - The value to filter with
+  *
+  * @category Database
+  *
+  * @example With `select()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .select()
+  *   .gte('id', 2)
+  * ```
+  *
+  * @exampleSql With `select()`
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Luke'),
+  *   (2, 'Leia'),
+  *   (3, 'Han');
+  * ```
+  *
+  * @exampleResponse With `select()`
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 2,
+  *       "name": "Leia"
+  *     },
+  *     {
+  *       "id": 3,
+  *       "name": "Han"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   gte(column, value) {
     this.url.searchParams.append(column, `gte.${value}`);
@@ -689,6 +1557,43 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   *
   * @param column - The column to filter on
   * @param value - The value to filter with
+  *
+  * @category Database
+  *
+  * @example With `select()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .select()
+  *   .lt('id', 2)
+  * ```
+  *
+  * @exampleSql With `select()`
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Luke'),
+  *   (2, 'Leia'),
+  *   (3, 'Han');
+  * ```
+  *
+  * @exampleResponse With `select()`
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 1,
+  *       "name": "Luke"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   lt(column, value) {
     this.url.searchParams.append(column, `lt.${value}`);
@@ -699,6 +1604,47 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   *
   * @param column - The column to filter on
   * @param value - The value to filter with
+  *
+  * @category Database
+  *
+  * @example With `select()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .select()
+  *   .lte('id', 2)
+  * ```
+  *
+  * @exampleSql With `select()`
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Luke'),
+  *   (2, 'Leia'),
+  *   (3, 'Han');
+  * ```
+  *
+  * @exampleResponse With `select()`
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 1,
+  *       "name": "Luke"
+  *     },
+  *     {
+  *       "id": 2,
+  *       "name": "Leia"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   lte(column, value) {
     this.url.searchParams.append(column, `lte.${value}`);
@@ -709,6 +1655,43 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   *
   * @param column - The column to filter on
   * @param pattern - The pattern to match with
+  *
+  * @category Database
+  *
+  * @example With `select()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .select()
+  *   .like('name', '%Lu%')
+  * ```
+  *
+  * @exampleSql With `select()`
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Luke'),
+  *   (2, 'Leia'),
+  *   (3, 'Han');
+  * ```
+  *
+  * @exampleResponse With `select()`
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 1,
+  *       "name": "Luke"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   like(column, pattern) {
     this.url.searchParams.append(column, `like.${pattern}`);
@@ -719,6 +1702,8 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   *
   * @param column - The column to filter on
   * @param patterns - The patterns to match with
+  *
+  * @category Database
   */
   likeAllOf(column, patterns) {
     this.url.searchParams.append(column, `like(all).{${patterns.join(",")}}`);
@@ -729,6 +1714,8 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   *
   * @param column - The column to filter on
   * @param patterns - The patterns to match with
+  *
+  * @category Database
   */
   likeAnyOf(column, patterns) {
     this.url.searchParams.append(column, `like(any).{${patterns.join(",")}}`);
@@ -739,6 +1726,43 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   *
   * @param column - The column to filter on
   * @param pattern - The pattern to match with
+  *
+  * @category Database
+  *
+  * @example With `select()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .select()
+  *   .ilike('name', '%lu%')
+  * ```
+  *
+  * @exampleSql With `select()`
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Luke'),
+  *   (2, 'Leia'),
+  *   (3, 'Han');
+  * ```
+  *
+  * @exampleResponse With `select()`
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 1,
+  *       "name": "Luke"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   ilike(column, pattern) {
     this.url.searchParams.append(column, `ilike.${pattern}`);
@@ -749,6 +1773,8 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   *
   * @param column - The column to filter on
   * @param patterns - The patterns to match with
+  *
+  * @category Database
   */
   ilikeAllOf(column, patterns) {
     this.url.searchParams.append(column, `ilike(all).{${patterns.join(",")}}`);
@@ -759,6 +1785,8 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   *
   * @param column - The column to filter on
   * @param patterns - The patterns to match with
+  *
+  * @category Database
   */
   ilikeAnyOf(column, patterns) {
     this.url.searchParams.append(column, `ilike(any).{${patterns.join(",")}}`);
@@ -797,6 +1825,47 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   *
   * @param column - The column to filter on
   * @param value - The value to filter with
+  *
+  * @category Database
+  *
+  * @exampleDescription Checking for nullness, true or false
+  * Using the `eq()` filter doesn't work when filtering for `null`.
+  *
+  * Instead, you need to use `is()`.
+  *
+  * @example Checking for nullness, true or false
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('countries')
+  *   .select()
+  *   .is('name', null)
+  * ```
+  *
+  * @exampleSql Checking for nullness, true or false
+  * ```sql
+  * create table
+  *   countries (id int8 primary key, name text);
+  *
+  * insert into
+  *   countries (id, name)
+  * values
+  *   (1, 'null'),
+  *   (2, null);
+  * ```
+  *
+  * @exampleResponse Checking for nullness, true or false
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 2,
+  *       "name": "null"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   is(column, value) {
     this.url.searchParams.append(column, `is.${value}`);
@@ -821,6 +1890,47 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   *
   * @param column - The column to filter on
   * @param values - The values array to filter with
+  *
+  * @category Database
+  *
+  * @example With `select()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .select()
+  *   .in('name', ['Leia', 'Han'])
+  * ```
+  *
+  * @exampleSql With `select()`
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Luke'),
+  *   (2, 'Leia'),
+  *   (3, 'Han');
+  * ```
+  *
+  * @exampleResponse With `select()`
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 2,
+  *       "name": "Leia"
+  *     },
+  *     {
+  *       "id": 3,
+  *       "name": "Han"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   in(column, values) {
     const cleanedValues = Array.from(new Set(values)).map((s) => {
@@ -850,6 +1960,127 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   *
   * @param column - The jsonb, array, or range column to filter on
   * @param value - The jsonb, array, or range value to filter with
+  *
+  * @category Database
+  *
+  * @example On array columns
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('issues')
+  *   .select()
+  *   .contains('tags', ['is:open', 'priority:low'])
+  * ```
+  *
+  * @exampleSql On array columns
+  * ```sql
+  * create table
+  *   issues (
+  *     id int8 primary key,
+  *     title text,
+  *     tags text[]
+  *   );
+  *
+  * insert into
+  *   issues (id, title, tags)
+  * values
+  *   (1, 'Cache invalidation is not working', array['is:open', 'severity:high', 'priority:low']),
+  *   (2, 'Use better names', array['is:open', 'severity:low', 'priority:medium']);
+  * ```
+  *
+  * @exampleResponse On array columns
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "title": "Cache invalidation is not working"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @exampleDescription On range columns
+  * Postgres supports a number of [range
+  * types](https://www.postgresql.org/docs/current/rangetypes.html). You
+  * can filter on range columns using the string representation of range
+  * values.
+  *
+  * @example On range columns
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('reservations')
+  *   .select()
+  *   .contains('during', '[2000-01-01 13:00, 2000-01-01 13:30)')
+  * ```
+  *
+  * @exampleSql On range columns
+  * ```sql
+  * create table
+  *   reservations (
+  *     id int8 primary key,
+  *     room_name text,
+  *     during tsrange
+  *   );
+  *
+  * insert into
+  *   reservations (id, room_name, during)
+  * values
+  *   (1, 'Emerald', '[2000-01-01 13:00, 2000-01-01 15:00)'),
+  *   (2, 'Topaz', '[2000-01-02 09:00, 2000-01-02 10:00)');
+  * ```
+  *
+  * @exampleResponse On range columns
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 1,
+  *       "room_name": "Emerald",
+  *       "during": "[\"2000-01-01 13:00:00\",\"2000-01-01 15:00:00\")"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @example On `jsonb` columns
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('users')
+  *   .select('name')
+  *   .contains('address', { postcode: 90210 })
+  * ```
+  *
+  * @exampleSql On `jsonb` columns
+  * ```sql
+  * create table
+  *   users (
+  *     id int8 primary key,
+  *     name text,
+  *     address jsonb
+  *   );
+  *
+  * insert into
+  *   users (id, name, address)
+  * values
+  *   (1, 'Michael', '{ "postcode": 90210, "street": "Melrose Place" }'),
+  *   (2, 'Jane', '{}');
+  * ```
+  *
+  * @exampleResponse On `jsonb` columns
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "name": "Michael"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   contains(column, value) {
     if (typeof value === "string") this.url.searchParams.append(column, `cs.${value}`);
@@ -863,6 +2094,128 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   *
   * @param column - The jsonb, array, or range column to filter on
   * @param value - The jsonb, array, or range value to filter with
+  *
+  * @category Database
+  *
+  * @example On array columns
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('classes')
+  *   .select('name')
+  *   .containedBy('days', ['monday', 'tuesday', 'wednesday', 'friday'])
+  * ```
+  *
+  * @exampleSql On array columns
+  * ```sql
+  * create table
+  *   classes (
+  *     id int8 primary key,
+  *     name text,
+  *     days text[]
+  *   );
+  *
+  * insert into
+  *   classes (id, name, days)
+  * values
+  *   (1, 'Chemistry', array['monday', 'friday']),
+  *   (2, 'History', array['monday', 'wednesday', 'thursday']);
+  * ```
+  *
+  * @exampleResponse On array columns
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "name": "Chemistry"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @exampleDescription On range columns
+  * Postgres supports a number of [range
+  * types](https://www.postgresql.org/docs/current/rangetypes.html). You
+  * can filter on range columns using the string representation of range
+  * values.
+  *
+  * @example On range columns
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('reservations')
+  *   .select()
+  *   .containedBy('during', '[2000-01-01 00:00, 2000-01-01 23:59)')
+  * ```
+  *
+  * @exampleSql On range columns
+  * ```sql
+  * create table
+  *   reservations (
+  *     id int8 primary key,
+  *     room_name text,
+  *     during tsrange
+  *   );
+  *
+  * insert into
+  *   reservations (id, room_name, during)
+  * values
+  *   (1, 'Emerald', '[2000-01-01 13:00, 2000-01-01 15:00)'),
+  *   (2, 'Topaz', '[2000-01-02 09:00, 2000-01-02 10:00)');
+  * ```
+  *
+  * @exampleResponse On range columns
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 1,
+  *       "room_name": "Emerald",
+  *       "during": "[\"2000-01-01 13:00:00\",\"2000-01-01 15:00:00\")"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @example On `jsonb` columns
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('users')
+  *   .select('name')
+  *   .containedBy('address', {})
+  * ```
+  *
+  * @exampleSql On `jsonb` columns
+  * ```sql
+  * create table
+  *   users (
+  *     id int8 primary key,
+  *     name text,
+  *     address jsonb
+  *   );
+  *
+  * insert into
+  *   users (id, name, address)
+  * values
+  *   (1, 'Michael', '{ "postcode": 90210, "street": "Melrose Place" }'),
+  *   (2, 'Jane', '{}');
+  * ```
+  *
+  * @exampleResponse On `jsonb` columns
+  * ```json
+  *   {
+  *     "data": [
+  *       {
+  *         "name": "Jane"
+  *       }
+  *     ],
+  *     "status": 200,
+  *     "statusText": "OK"
+  *   }
+  *
+  * ```
   */
   containedBy(column, value) {
     if (typeof value === "string") this.url.searchParams.append(column, `cd.${value}`);
@@ -876,6 +2229,54 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   *
   * @param column - The range column to filter on
   * @param range - The range to filter with
+  *
+  * @category Database
+  *
+  * @exampleDescription With `select()`
+  * Postgres supports a number of [range
+  * types](https://www.postgresql.org/docs/current/rangetypes.html). You
+  * can filter on range columns using the string representation of range
+  * values.
+  *
+  * @example With `select()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('reservations')
+  *   .select()
+  *   .rangeGt('during', '[2000-01-02 08:00, 2000-01-02 09:00)')
+  * ```
+  *
+  * @exampleSql With `select()`
+  * ```sql
+  * create table
+  *   reservations (
+  *     id int8 primary key,
+  *     room_name text,
+  *     during tsrange
+  *   );
+  *
+  * insert into
+  *   reservations (id, room_name, during)
+  * values
+  *   (1, 'Emerald', '[2000-01-01 13:00, 2000-01-01 15:00)'),
+  *   (2, 'Topaz', '[2000-01-02 09:00, 2000-01-02 10:00)');
+  * ```
+  *
+  * @exampleResponse With `select()`
+  * ```json
+  *   {
+  *     "data": [
+  *       {
+  *         "id": 2,
+  *         "room_name": "Topaz",
+  *         "during": "[\"2000-01-02 09:00:00\",\"2000-01-02 10:00:00\")"
+  *       }
+  *     ],
+  *     "status": 200,
+  *     "statusText": "OK"
+  *   }
+  *
+  * ```
   */
   rangeGt(column, range) {
     this.url.searchParams.append(column, `sr.${range}`);
@@ -888,6 +2289,54 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   *
   * @param column - The range column to filter on
   * @param range - The range to filter with
+  *
+  * @category Database
+  *
+  * @exampleDescription With `select()`
+  * Postgres supports a number of [range
+  * types](https://www.postgresql.org/docs/current/rangetypes.html). You
+  * can filter on range columns using the string representation of range
+  * values.
+  *
+  * @example With `select()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('reservations')
+  *   .select()
+  *   .rangeGte('during', '[2000-01-02 08:30, 2000-01-02 09:30)')
+  * ```
+  *
+  * @exampleSql With `select()`
+  * ```sql
+  * create table
+  *   reservations (
+  *     id int8 primary key,
+  *     room_name text,
+  *     during tsrange
+  *   );
+  *
+  * insert into
+  *   reservations (id, room_name, during)
+  * values
+  *   (1, 'Emerald', '[2000-01-01 13:00, 2000-01-01 15:00)'),
+  *   (2, 'Topaz', '[2000-01-02 09:00, 2000-01-02 10:00)');
+  * ```
+  *
+  * @exampleResponse With `select()`
+  * ```json
+  *   {
+  *     "data": [
+  *       {
+  *         "id": 2,
+  *         "room_name": "Topaz",
+  *         "during": "[\"2000-01-02 09:00:00\",\"2000-01-02 10:00:00\")"
+  *       }
+  *     ],
+  *     "status": 200,
+  *     "statusText": "OK"
+  *   }
+  *
+  * ```
   */
   rangeGte(column, range) {
     this.url.searchParams.append(column, `nxl.${range}`);
@@ -899,6 +2348,53 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   *
   * @param column - The range column to filter on
   * @param range - The range to filter with
+  *
+  * @category Database
+  *
+  * @exampleDescription With `select()`
+  * Postgres supports a number of [range
+  * types](https://www.postgresql.org/docs/current/rangetypes.html). You
+  * can filter on range columns using the string representation of range
+  * values.
+  *
+  * @example With `select()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('reservations')
+  *   .select()
+  *   .rangeLt('during', '[2000-01-01 15:00, 2000-01-01 16:00)')
+  * ```
+  *
+  * @exampleSql With `select()`
+  * ```sql
+  * create table
+  *   reservations (
+  *     id int8 primary key,
+  *     room_name text,
+  *     during tsrange
+  *   );
+  *
+  * insert into
+  *   reservations (id, room_name, during)
+  * values
+  *   (1, 'Emerald', '[2000-01-01 13:00, 2000-01-01 15:00)'),
+  *   (2, 'Topaz', '[2000-01-02 09:00, 2000-01-02 10:00)');
+  * ```
+  *
+  * @exampleResponse With `select()`
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 1,
+  *       "room_name": "Emerald",
+  *       "during": "[\"2000-01-01 13:00:00\",\"2000-01-01 15:00:00\")"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   rangeLt(column, range) {
     this.url.searchParams.append(column, `sl.${range}`);
@@ -911,6 +2407,54 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   *
   * @param column - The range column to filter on
   * @param range - The range to filter with
+  *
+  * @category Database
+  *
+  * @exampleDescription With `select()`
+  * Postgres supports a number of [range
+  * types](https://www.postgresql.org/docs/current/rangetypes.html). You
+  * can filter on range columns using the string representation of range
+  * values.
+  *
+  * @example With `select()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('reservations')
+  *   .select()
+  *   .rangeLte('during', '[2000-01-01 14:00, 2000-01-01 16:00)')
+  * ```
+  *
+  * @exampleSql With `select()`
+  * ```sql
+  * create table
+  *   reservations (
+  *     id int8 primary key,
+  *     room_name text,
+  *     during tsrange
+  *   );
+  *
+  * insert into
+  *   reservations (id, room_name, during)
+  * values
+  *   (1, 'Emerald', '[2000-01-01 13:00, 2000-01-01 15:00)'),
+  *   (2, 'Topaz', '[2000-01-02 09:00, 2000-01-02 10:00)');
+  * ```
+  *
+  * @exampleResponse With `select()`
+  * ```json
+  *   {
+  *     "data": [
+  *       {
+  *         "id": 1,
+  *         "room_name": "Emerald",
+  *         "during": "[\"2000-01-01 13:00:00\",\"2000-01-01 15:00:00\")"
+  *       }
+  *     ],
+  *     "status": 200,
+  *     "statusText": "OK"
+  *   }
+  *
+  * ```
   */
   rangeLte(column, range) {
     this.url.searchParams.append(column, `nxr.${range}`);
@@ -923,6 +2467,53 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   *
   * @param column - The range column to filter on
   * @param range - The range to filter with
+  *
+  * @category Database
+  *
+  * @exampleDescription With `select()`
+  * Postgres supports a number of [range
+  * types](https://www.postgresql.org/docs/current/rangetypes.html). You
+  * can filter on range columns using the string representation of range
+  * values.
+  *
+  * @example With `select()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('reservations')
+  *   .select()
+  *   .rangeAdjacent('during', '[2000-01-01 12:00, 2000-01-01 13:00)')
+  * ```
+  *
+  * @exampleSql With `select()`
+  * ```sql
+  * create table
+  *   reservations (
+  *     id int8 primary key,
+  *     room_name text,
+  *     during tsrange
+  *   );
+  *
+  * insert into
+  *   reservations (id, room_name, during)
+  * values
+  *   (1, 'Emerald', '[2000-01-01 13:00, 2000-01-01 15:00)'),
+  *   (2, 'Topaz', '[2000-01-02 09:00, 2000-01-02 10:00)');
+  * ```
+  *
+  * @exampleResponse With `select()`
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 1,
+  *       "room_name": "Emerald",
+  *       "during": "[\"2000-01-01 13:00:00\",\"2000-01-01 15:00:00\")"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   rangeAdjacent(column, range) {
     this.url.searchParams.append(column, `adj.${range}`);
@@ -934,6 +2525,90 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   *
   * @param column - The array or range column to filter on
   * @param value - The array or range value to filter with
+  *
+  * @category Database
+  *
+  * @example On array columns
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('issues')
+  *   .select('title')
+  *   .overlaps('tags', ['is:closed', 'severity:high'])
+  * ```
+  *
+  * @exampleSql On array columns
+  * ```sql
+  * create table
+  *   issues (
+  *     id int8 primary key,
+  *     title text,
+  *     tags text[]
+  *   );
+  *
+  * insert into
+  *   issues (id, title, tags)
+  * values
+  *   (1, 'Cache invalidation is not working', array['is:open', 'severity:high', 'priority:low']),
+  *   (2, 'Use better names', array['is:open', 'severity:low', 'priority:medium']);
+  * ```
+  *
+  * @exampleResponse On array columns
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "title": "Cache invalidation is not working"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @exampleDescription On range columns
+  * Postgres supports a number of [range
+  * types](https://www.postgresql.org/docs/current/rangetypes.html). You
+  * can filter on range columns using the string representation of range
+  * values.
+  *
+  * @example On range columns
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('reservations')
+  *   .select()
+  *   .overlaps('during', '[2000-01-01 12:45, 2000-01-01 13:15)')
+  * ```
+  *
+  * @exampleSql On range columns
+  * ```sql
+  * create table
+  *   reservations (
+  *     id int8 primary key,
+  *     room_name text,
+  *     during tsrange
+  *   );
+  *
+  * insert into
+  *   reservations (id, room_name, during)
+  * values
+  *   (1, 'Emerald', '[2000-01-01 13:00, 2000-01-01 15:00)'),
+  *   (2, 'Topaz', '[2000-01-02 09:00, 2000-01-02 10:00)');
+  * ```
+  *
+  * @exampleResponse On range columns
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 1,
+  *       "room_name": "Emerald",
+  *       "during": "[\"2000-01-01 13:00:00\",\"2000-01-01 15:00:00\")"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   overlaps(column, value) {
     if (typeof value === "string") this.url.searchParams.append(column, `ov.${value}`);
@@ -949,6 +2624,99 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   * @param options - Named parameters
   * @param options.config - The text search configuration to use
   * @param options.type - Change how the `query` text is interpreted
+  *
+  * @category Database
+  *
+  * @remarks
+  * - For more information, see [Postgres full text search](/docs/guides/database/full-text-search).
+  *
+  * @example Text search
+  * ```ts
+  * const result = await supabase
+  *   .from("texts")
+  *   .select("content")
+  *   .textSearch("content", `'eggs' & 'ham'`, {
+  *     config: "english",
+  *   });
+  * ```
+  *
+  * @exampleSql Text search
+  * ```sql
+  * create table texts (
+  *   id      bigint
+  *           primary key
+  *           generated always as identity,
+  *   content text
+  * );
+  *
+  * insert into texts (content) values
+  *     ('Four score and seven years ago'),
+  *     ('The road goes ever on and on'),
+  *     ('Green eggs and ham')
+  * ;
+  * ```
+  *
+  * @exampleResponse Text search
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "content": "Green eggs and ham"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @exampleDescription Basic normalization
+  * Uses PostgreSQL's `plainto_tsquery` function.
+  *
+  * @example Basic normalization
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('quotes')
+  *   .select('catchphrase')
+  *   .textSearch('catchphrase', `'fat' & 'cat'`, {
+  *     type: 'plain',
+  *     config: 'english'
+  *   })
+  * ```
+  *
+  * @exampleDescription Full normalization
+  * Uses PostgreSQL's `phraseto_tsquery` function.
+  *
+  * @example Full normalization
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('quotes')
+  *   .select('catchphrase')
+  *   .textSearch('catchphrase', `'fat' & 'cat'`, {
+  *     type: 'phrase',
+  *     config: 'english'
+  *   })
+  * ```
+  *
+  * @exampleDescription Websearch
+  * Uses PostgreSQL's `websearch_to_tsquery` function.
+  * This function will never raise syntax errors, which makes it possible to use raw user-supplied input for search, and can be used
+  * with advanced operators.
+  *
+  * - `unquoted text`: text not inside quote marks will be converted to terms separated by & operators, as if processed by plainto_tsquery.
+  * - `"quoted text"`: text inside quote marks will be converted to terms separated by `<->` operators, as if processed by phraseto_tsquery.
+  * - `OR`: the word “or” will be converted to the | operator.
+  * - `-`: a dash will be converted to the ! operator.
+  *
+  * @example Websearch
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('quotes')
+  *   .select('catchphrase')
+  *   .textSearch('catchphrase', `'fat or cat'`, {
+  *     type: 'websearch',
+  *     config: 'english'
+  *   })
+  * ```
   */
   textSearch(column, query, { config, type } = {}) {
     let typePart = "";
@@ -965,9 +2733,45 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   *
   * @param query - The object to filter with, with column names as keys mapped
   * to their filter values
+  *
+  * @category Database
+  *
+  * @example With `select()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .select('name')
+  *   .match({ id: 2, name: 'Leia' })
+  * ```
+  *
+  * @exampleSql With `select()`
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Luke'),
+  *   (2, 'Leia'),
+  *   (3, 'Han');
+  * ```
+  *
+  * @exampleResponse With `select()`
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "name": "Leia"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   match(query) {
-    Object.entries(query).forEach(([column, value]) => {
+    Object.entries(query).filter(([_, value]) => value !== void 0).forEach(([column, value]) => {
       this.url.searchParams.append(column, `eq.${value}`);
     });
     return this;
@@ -984,6 +2788,51 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   * @param operator - The operator to be negated to filter with, following
   * PostgREST syntax
   * @param value - The value to filter with, following PostgREST syntax
+  *
+  * @category Database
+  *
+  * @remarks
+  * not() expects you to use the raw PostgREST syntax for the filter values.
+  *
+  * ```ts
+  * .not('id', 'in', '(5,6,7)')  // Use `()` for `in` filter
+  * .not('arraycol', 'cs', '{"a","b"}')  // Use `cs` for `contains()`, `{}` for array values
+  * ```
+  *
+  * @example With `select()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('countries')
+  *   .select()
+  *   .not('name', 'is', null)
+  * ```
+  *
+  * @exampleSql With `select()`
+  * ```sql
+  * create table
+  *   countries (id int8 primary key, name text);
+  *
+  * insert into
+  *   countries (id, name)
+  * values
+  *   (1, 'null'),
+  *   (2, null);
+  * ```
+  *
+  * @exampleResponse With `select()`
+  * ```json
+  *   {
+  *     "data": [
+  *       {
+  *         "id": 1,
+  *         "name": "null"
+  *       }
+  *     ],
+  *     "status": 200,
+  *     "statusText": "OK"
+  *   }
+  *
+  * ```
   */
   not(column, operator, value) {
     this.url.searchParams.append(column, `not.${operator}.${value}`);
@@ -1003,6 +2852,141 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   * @param options.referencedTable - Set this to filter on referenced tables
   * instead of the parent table
   * @param options.foreignTable - Deprecated, use `referencedTable` instead
+  *
+  * @category Database
+  *
+  * @remarks
+  * or() expects you to use the raw PostgREST syntax for the filter names and values.
+  *
+  * ```ts
+  * .or('id.in.(5,6,7), arraycol.cs.{"a","b"}')  // Use `()` for `in` filter, `{}` for array values and `cs` for `contains()`.
+  * .or('id.in.(5,6,7), arraycol.cd.{"a","b"}')  // Use `cd` for `containedBy()`
+  * ```
+  *
+  * @example With `select()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .select('name')
+  *   .or('id.eq.2,name.eq.Han')
+  * ```
+  *
+  * @exampleSql With `select()`
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Luke'),
+  *   (2, 'Leia'),
+  *   (3, 'Han');
+  * ```
+  *
+  * @exampleResponse With `select()`
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "name": "Leia"
+  *     },
+  *     {
+  *       "name": "Han"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @example Use `or` with `and`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .select('name')
+  *   .or('id.gt.3,and(id.eq.1,name.eq.Luke)')
+  * ```
+  *
+  * @exampleSql Use `or` with `and`
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Luke'),
+  *   (2, 'Leia'),
+  *   (3, 'Han');
+  * ```
+  *
+  * @exampleResponse Use `or` with `and`
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "name": "Luke"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @example Use `or` on referenced tables
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('orchestral_sections')
+  *   .select(`
+  *     name,
+  *     instruments!inner (
+  *       name
+  *     )
+  *   `)
+  *   .or('section_id.eq.1,name.eq.guzheng', { referencedTable: 'instruments' })
+  * ```
+  *
+  * @exampleSql Use `or` on referenced tables
+  * ```sql
+  * create table
+  *   orchestral_sections (id int8 primary key, name text);
+  * create table
+  *   instruments (
+  *     id int8 primary key,
+  *     section_id int8 not null references orchestral_sections,
+  *     name text
+  *   );
+  *
+  * insert into
+  *   orchestral_sections (id, name)
+  * values
+  *   (1, 'strings'),
+  *   (2, 'woodwinds');
+  * insert into
+  *   instruments (id, section_id, name)
+  * values
+  *   (1, 2, 'flute'),
+  *   (2, 1, 'violin');
+  * ```
+  *
+  * @exampleResponse Use `or` on referenced tables
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "name": "strings",
+  *       "instruments": [
+  *         {
+  *           "name": "violin"
+  *         }
+  *       ]
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   or(filters, { foreignTable, referencedTable = foreignTable } = {}) {
     const key = referencedTable ? `${referencedTable}.or` : "or";
@@ -1021,6 +3005,105 @@ var PostgrestFilterBuilder = class extends PostgrestTransformBuilder {
   * @param column - The column to filter on
   * @param operator - The operator to filter with, following PostgREST syntax
   * @param value - The value to filter with, following PostgREST syntax
+  *
+  * @category Database
+  *
+  * @remarks
+  * filter() expects you to use the raw PostgREST syntax for the filter values.
+  *
+  * ```ts
+  * .filter('id', 'in', '(5,6,7)')  // Use `()` for `in` filter
+  * .filter('arraycol', 'cs', '{"a","b"}')  // Use `cs` for `contains()`, `{}` for array values
+  * ```
+  *
+  * @example With `select()`
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .select()
+  *   .filter('name', 'in', '("Han","Yoda")')
+  * ```
+  *
+  * @exampleSql With `select()`
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Luke'),
+  *   (2, 'Leia'),
+  *   (3, 'Han');
+  * ```
+  *
+  * @exampleResponse With `select()`
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 3,
+  *       "name": "Han"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @example On a referenced table
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('orchestral_sections')
+  *   .select(`
+  *     name,
+  *     instruments!inner (
+  *       name
+  *     )
+  *   `)
+  *   .filter('instruments.name', 'eq', 'flute')
+  * ```
+  *
+  * @exampleSql On a referenced table
+  * ```sql
+  * create table
+  *   orchestral_sections (id int8 primary key, name text);
+  * create table
+  *    instruments (
+  *     id int8 primary key,
+  *     section_id int8 not null references orchestral_sections,
+  *     name text
+  *   );
+  *
+  * insert into
+  *   orchestral_sections (id, name)
+  * values
+  *   (1, 'strings'),
+  *   (2, 'woodwinds');
+  * insert into
+  *   instruments (id, section_id, name)
+  * values
+  *   (1, 2, 'flute'),
+  *   (2, 1, 'violin');
+  * ```
+  *
+  * @exampleResponse On a referenced table
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "name": "woodwinds",
+  *       "instruments": [
+  *         {
+  *           "name": "flute"
+  *         }
+  *       ]
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   filter(column, operator, value) {
     this.url.searchParams.append(column, `${operator}.${value}`);
@@ -1033,7 +3116,19 @@ var PostgrestQueryBuilder = class {
   *
   * @example
   * ```ts
-  * import PostgrestQueryBuilder from '@supabase/postgrest-js'
+  * import { PostgrestQueryBuilder } from '@supabase/postgrest-js'
+  *
+  * const query = new PostgrestQueryBuilder(
+  *   new URL('https://xyzcompany.supabase.co/rest/v1/users'),
+  *   { headers: { apikey: 'public-anon-key' } }
+  * )
+  * ```
+  *
+  * @category Database
+  *
+  * @example Example 1
+  * ```ts
+  * import { PostgrestQueryBuilder } from '@supabase/postgrest-js'
   *
   * const query = new PostgrestQueryBuilder(
   *   new URL('https://xyzcompany.supabase.co/rest/v1/users'),
@@ -1041,11 +3136,12 @@ var PostgrestQueryBuilder = class {
   * )
   * ```
   */
-  constructor(url, { headers = {}, schema, fetch: fetch$1 }) {
+  constructor(url, { headers = {}, schema, fetch: fetch$1, urlLengthLimit = 8e3 }) {
     this.url = url;
     this.headers = new Headers(headers);
     this.schema = schema;
     this.fetch = fetch$1;
+    this.urlLengthLimit = urlLengthLimit;
   }
   /**
   * Clone URL and headers to prevent shared state between operations.
@@ -1076,6 +3172,764 @@ var PostgrestQueryBuilder = class {
   *
   * `"estimated"`: Uses exact count for low numbers and planned count for high
   * numbers.
+  *
+  * @remarks
+  * When using `count` with `.range()` or `.limit()`, the returned `count` is the total number of rows
+  * that match your filters, not the number of rows in the current page. Use this to build pagination UI.
+  
+  * - By default, Supabase projects return a maximum of 1,000 rows. This setting can be changed in your project's [API settings](/dashboard/project/_/settings/api). It's recommended that you keep it low to limit the payload size of accidental or malicious requests. You can use `range()` queries to paginate through your data.
+  * - `select()` can be combined with [Filters](/docs/reference/javascript/using-filters)
+  * - `select()` can be combined with [Modifiers](/docs/reference/javascript/using-modifiers)
+  * - `apikey` is a reserved keyword if you're using the [Supabase Platform](/docs/guides/platform) and [should be avoided as a column name](https://github.com/supabase/supabase/issues/5465). *
+  * @category Database
+  *
+  * @example Getting your data
+  * ```js
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .select()
+  * ```
+  *
+  * @exampleSql Getting your data
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Harry'),
+  *   (2, 'Frodo'),
+  *   (3, 'Katniss');
+  * ```
+  *
+  * @exampleResponse Getting your data
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 1,
+  *       "name": "Harry"
+  *     },
+  *     {
+  *       "id": 2,
+  *       "name": "Frodo"
+  *     },
+  *     {
+  *       "id": 3,
+  *       "name": "Katniss"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @example Selecting specific columns
+  * ```js
+  * const { data, error } = await supabase
+  *   .from('characters')
+  *   .select('name')
+  * ```
+  *
+  * @exampleSql Selecting specific columns
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Frodo'),
+  *   (2, 'Harry'),
+  *   (3, 'Katniss');
+  * ```
+  *
+  * @exampleResponse Selecting specific columns
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "name": "Frodo"
+  *     },
+  *     {
+  *       "name": "Harry"
+  *     },
+  *     {
+  *       "name": "Katniss"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @exampleDescription Query referenced tables
+  * If your database has foreign key relationships, you can query related tables too.
+  *
+  * @example Query referenced tables
+  * ```js
+  * const { data, error } = await supabase
+  *   .from('orchestral_sections')
+  *   .select(`
+  *     name,
+  *     instruments (
+  *       name
+  *     )
+  *   `)
+  * ```
+  *
+  * @exampleSql Query referenced tables
+  * ```sql
+  * create table
+  *   orchestral_sections (id int8 primary key, name text);
+  * create table
+  *   instruments (
+  *     id int8 primary key,
+  *     section_id int8 not null references orchestral_sections,
+  *     name text
+  *   );
+  *
+  * insert into
+  *   orchestral_sections (id, name)
+  * values
+  *   (1, 'strings'),
+  *   (2, 'woodwinds');
+  * insert into
+  *   instruments (id, section_id, name)
+  * values
+  *   (1, 2, 'flute'),
+  *   (2, 1, 'violin');
+  * ```
+  *
+  * @exampleResponse Query referenced tables
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "name": "strings",
+  *       "instruments": [
+  *         {
+  *           "name": "violin"
+  *         }
+  *       ]
+  *     },
+  *     {
+  *       "name": "woodwinds",
+  *       "instruments": [
+  *         {
+  *           "name": "flute"
+  *         }
+  *       ]
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @exampleDescription Query referenced tables with spaces in their names
+  * If your table name contains spaces, you must use double quotes in the `select` statement to reference the table.
+  *
+  * @example Query referenced tables with spaces in their names
+  * ```js
+  * const { data, error } = await supabase
+  *   .from('orchestral sections')
+  *   .select(`
+  *     name,
+  *     "musical instruments" (
+  *       name
+  *     )
+  *   `)
+  * ```
+  *
+  * @exampleSql Query referenced tables with spaces in their names
+  * ```sql
+  * create table
+  *   "orchestral sections" (id int8 primary key, name text);
+  * create table
+  *   "musical instruments" (
+  *     id int8 primary key,
+  *     section_id int8 not null references "orchestral sections",
+  *     name text
+  *   );
+  *
+  * insert into
+  *   "orchestral sections" (id, name)
+  * values
+  *   (1, 'strings'),
+  *   (2, 'woodwinds');
+  * insert into
+  *   "musical instruments" (id, section_id, name)
+  * values
+  *   (1, 2, 'flute'),
+  *   (2, 1, 'violin');
+  * ```
+  *
+  * @exampleResponse Query referenced tables with spaces in their names
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "name": "strings",
+  *       "musical instruments": [
+  *         {
+  *           "name": "violin"
+  *         }
+  *       ]
+  *     },
+  *     {
+  *       "name": "woodwinds",
+  *       "musical instruments": [
+  *         {
+  *           "name": "flute"
+  *         }
+  *       ]
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @exampleDescription Query referenced tables through a join table
+  * If you're in a situation where your tables are **NOT** directly
+  * related, but instead are joined by a _join table_, you can still use
+  * the `select()` method to query the related data. The join table needs
+  * to have the foreign keys as part of its composite primary key.
+  *
+  * @example Query referenced tables through a join table
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('users')
+  *   .select(`
+  *     name,
+  *     teams (
+  *       name
+  *     )
+  *   `)
+  *   
+  * ```
+  *
+  * @exampleSql Query referenced tables through a join table
+  * ```sql
+  * create table
+  *   users (
+  *     id int8 primary key,
+  *     name text
+  *   );
+  * create table
+  *   teams (
+  *     id int8 primary key,
+  *     name text
+  *   );
+  * -- join table
+  * create table
+  *   users_teams (
+  *     user_id int8 not null references users,
+  *     team_id int8 not null references teams,
+  *     -- both foreign keys must be part of a composite primary key
+  *     primary key (user_id, team_id)
+  *   );
+  *
+  * insert into
+  *   users (id, name)
+  * values
+  *   (1, 'Kiran'),
+  *   (2, 'Evan');
+  * insert into
+  *   teams (id, name)
+  * values
+  *   (1, 'Green'),
+  *   (2, 'Blue');
+  * insert into
+  *   users_teams (user_id, team_id)
+  * values
+  *   (1, 1),
+  *   (1, 2),
+  *   (2, 2);
+  * ```
+  *
+  * @exampleResponse Query referenced tables through a join table
+  * ```json
+  *   {
+  *     "data": [
+  *       {
+  *         "name": "Kiran",
+  *         "teams": [
+  *           {
+  *             "name": "Green"
+  *           },
+  *           {
+  *             "name": "Blue"
+  *           }
+  *         ]
+  *       },
+  *       {
+  *         "name": "Evan",
+  *         "teams": [
+  *           {
+  *             "name": "Blue"
+  *           }
+  *         ]
+  *       }
+  *     ],
+  *     "status": 200,
+  *     "statusText": "OK"
+  *   }
+  *   
+  * ```
+  *
+  * @exampleDescription Query the same referenced table multiple times
+  * If you need to query the same referenced table twice, use the name of the
+  * joined column to identify which join to use. You can also give each
+  * column an alias.
+  *
+  * @example Query the same referenced table multiple times
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('messages')
+  *   .select(`
+  *     content,
+  *     from:sender_id(name),
+  *     to:receiver_id(name)
+  *   `)
+  *
+  * // To infer types, use the name of the table (in this case `users`) and
+  * // the name of the foreign key constraint.
+  * const { data, error } = await supabase
+  *   .from('messages')
+  *   .select(`
+  *     content,
+  *     from:users!messages_sender_id_fkey(name),
+  *     to:users!messages_receiver_id_fkey(name)
+  *   `)
+  * ```
+  *
+  * @exampleSql Query the same referenced table multiple times
+  * ```sql
+  *  create table
+  *  users (id int8 primary key, name text);
+  *
+  *  create table
+  *    messages (
+  *      sender_id int8 not null references users,
+  *      receiver_id int8 not null references users,
+  *      content text
+  *    );
+  *
+  *  insert into
+  *    users (id, name)
+  *  values
+  *    (1, 'Kiran'),
+  *    (2, 'Evan');
+  *
+  *  insert into
+  *    messages (sender_id, receiver_id, content)
+  *  values
+  *    (1, 2, '👋');
+  *  ```
+  * ```
+  *
+  * @exampleResponse Query the same referenced table multiple times
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "content": "👋",
+  *       "from": {
+  *         "name": "Kiran"
+  *       },
+  *       "to": {
+  *         "name": "Evan"
+  *       }
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @exampleDescription Query nested foreign tables through a join table
+  * You can use the result of a joined table to gather data in
+  * another foreign table. With multiple references to the same foreign
+  * table you must specify the column on which to conduct the join.
+  *
+  * @example Query nested foreign tables through a join table
+  * ```ts
+  *   const { data, error } = await supabase
+  *     .from('games')
+  *     .select(`
+  *       game_id:id,
+  *       away_team:teams!games_away_team_fkey (
+  *         users (
+  *           id,
+  *           name
+  *         )
+  *       )
+  *     `)
+  *   
+  * ```
+  *
+  * @exampleSql Query nested foreign tables through a join table
+  * ```sql
+  * ```sql
+  * create table
+  *   users (
+  *     id int8 primary key,
+  *     name text
+  *   );
+  * create table
+  *   teams (
+  *     id int8 primary key,
+  *     name text
+  *   );
+  * -- join table
+  * create table
+  *   users_teams (
+  *     user_id int8 not null references users,
+  *     team_id int8 not null references teams,
+  *
+  *     primary key (user_id, team_id)
+  *   );
+  * create table
+  *   games (
+  *     id int8 primary key,
+  *     home_team int8 not null references teams,
+  *     away_team int8 not null references teams,
+  *     name text
+  *   );
+  *
+  * insert into users (id, name)
+  * values
+  *   (1, 'Kiran'),
+  *   (2, 'Evan');
+  * insert into
+  *   teams (id, name)
+  * values
+  *   (1, 'Green'),
+  *   (2, 'Blue');
+  * insert into
+  *   users_teams (user_id, team_id)
+  * values
+  *   (1, 1),
+  *   (1, 2),
+  *   (2, 2);
+  * insert into
+  *   games (id, home_team, away_team, name)
+  * values
+  *   (1, 1, 2, 'Green vs Blue'),
+  *   (2, 2, 1, 'Blue vs Green');
+  * ```
+  *
+  * @exampleResponse Query nested foreign tables through a join table
+  * ```json
+  *   {
+  *     "data": [
+  *       {
+  *         "game_id": 1,
+  *         "away_team": {
+  *           "users": [
+  *             {
+  *               "id": 1,
+  *               "name": "Kiran"
+  *             },
+  *             {
+  *               "id": 2,
+  *               "name": "Evan"
+  *             }
+  *           ]
+  *         }
+  *       },
+  *       {
+  *         "game_id": 2,
+  *         "away_team": {
+  *           "users": [
+  *             {
+  *               "id": 1,
+  *               "name": "Kiran"
+  *             }
+  *           ]
+  *         }
+  *       }
+  *     ],
+  *     "status": 200,
+  *     "statusText": "OK"
+  *   }
+  *   
+  * ```
+  *
+  * @exampleDescription Filtering through referenced tables
+  * If the filter on a referenced table's column is not satisfied, the referenced
+  * table returns `[]` or `null` but the parent table is not filtered out.
+  * If you want to filter out the parent table rows, use the `!inner` hint
+  *
+  * @example Filtering through referenced tables
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('instruments')
+  *   .select('name, orchestral_sections(*)')
+  *   .eq('orchestral_sections.name', 'percussion')
+  * ```
+  *
+  * @exampleSql Filtering through referenced tables
+  * ```sql
+  * create table
+  *   orchestral_sections (id int8 primary key, name text);
+  * create table
+  *   instruments (
+  *     id int8 primary key,
+  *     section_id int8 not null references orchestral_sections,
+  *     name text
+  *   );
+  *
+  * insert into
+  *   orchestral_sections (id, name)
+  * values
+  *   (1, 'strings'),
+  *   (2, 'woodwinds');
+  * insert into
+  *   instruments (id, section_id, name)
+  * values
+  *   (1, 2, 'flute'),
+  *   (2, 1, 'violin');
+  * ```
+  *
+  * @exampleResponse Filtering through referenced tables
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "name": "flute",
+  *       "orchestral_sections": null
+  *     },
+  *     {
+  *       "name": "violin",
+  *       "orchestral_sections": null
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @exampleDescription Querying referenced table with count
+  * You can get the number of rows in a related table by using the
+  * **count** property.
+  *
+  * @example Querying referenced table with count
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('orchestral_sections')
+  *   .select(`*, instruments(count)`)
+  * ```
+  *
+  * @exampleSql Querying referenced table with count
+  * ```sql
+  * create table orchestral_sections (
+  *   "id" "uuid" primary key default "extensions"."uuid_generate_v4"() not null,
+  *   "name" text
+  * );
+  *
+  * create table characters (
+  *   "id" "uuid" primary key default "extensions"."uuid_generate_v4"() not null,
+  *   "name" text,
+  *   "section_id" "uuid" references public.orchestral_sections on delete cascade
+  * );
+  *
+  * with section as (
+  *   insert into orchestral_sections (name)
+  *   values ('strings') returning id
+  * )
+  * insert into instruments (name, section_id) values
+  * ('violin', (select id from section)),
+  * ('viola', (select id from section)),
+  * ('cello', (select id from section)),
+  * ('double bass', (select id from section));
+  * ```
+  *
+  * @exampleResponse Querying referenced table with count
+  * ```json
+  * [
+  *   {
+  *     "id": "693694e7-d993-4360-a6d7-6294e325d9b6",
+  *     "name": "strings",
+  *     "instruments": [
+  *       {
+  *         "count": 4
+  *       }
+  *     ]
+  *   }
+  * ]
+  * ```
+  *
+  * @exampleDescription Querying with count option
+  * You can get the number of rows by using the
+  * [count](/docs/reference/javascript/select#parameters) option.
+  *
+  * @example Querying with count option
+  * ```ts
+  * const { count, error } = await supabase
+  *   .from('characters')
+  *   .select('*', { count: 'exact', head: true })
+  * ```
+  *
+  * @exampleSql Querying with count option
+  * ```sql
+  * create table
+  *   characters (id int8 primary key, name text);
+  *
+  * insert into
+  *   characters (id, name)
+  * values
+  *   (1, 'Luke'),
+  *   (2, 'Leia'),
+  *   (3, 'Han');
+  * ```
+  *
+  * @exampleResponse Querying with count option
+  * ```json
+  * {
+  *   "count": 3,
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @exampleDescription Querying JSON data
+  * You can select and filter data inside of
+  * [JSON](/docs/guides/database/json) columns. Postgres offers some
+  * [operators](/docs/guides/database/json#query-the-jsonb-data) for
+  * querying JSON data.
+  *
+  * @example Querying JSON data
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('users')
+  *   .select(`
+  *     id, name,
+  *     address->city
+  *   `)
+  * ```
+  *
+  * @exampleSql Querying JSON data
+  * ```sql
+  * create table
+  *   users (
+  *     id int8 primary key,
+  *     name text,
+  *     address jsonb
+  *   );
+  *
+  * insert into
+  *   users (id, name, address)
+  * values
+  *   (1, 'Frodo', '{"city":"Hobbiton"}');
+  * ```
+  *
+  * @exampleResponse Querying JSON data
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 1,
+  *       "name": "Frodo",
+  *       "city": "Hobbiton"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @exampleDescription Querying referenced table with inner join
+  * If you don't want to return the referenced table contents, you can leave the parenthesis empty.
+  * Like `.select('name, orchestral_sections!inner()')`.
+  *
+  * @example Querying referenced table with inner join
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('instruments')
+  *   .select('name, orchestral_sections!inner(name)')
+  *   .eq('orchestral_sections.name', 'woodwinds')
+  *   .limit(1)
+  * ```
+  *
+  * @exampleSql Querying referenced table with inner join
+  * ```sql
+  * create table orchestral_sections (
+  *   "id" "uuid" primary key default "extensions"."uuid_generate_v4"() not null,
+  *   "name" text
+  * );
+  *
+  * create table instruments (
+  *   "id" "uuid" primary key default "extensions"."uuid_generate_v4"() not null,
+  *   "name" text,
+  *   "section_id" "uuid" references public.orchestral_sections on delete cascade
+  * );
+  *
+  * with section as (
+  *   insert into orchestral_sections (name)
+  *   values ('woodwinds') returning id
+  * )
+  * insert into instruments (name, section_id) values
+  * ('flute', (select id from section)),
+  * ('clarinet', (select id from section)),
+  * ('bassoon', (select id from section)),
+  * ('piccolo', (select id from section));
+  * ```
+  *
+  * @exampleResponse Querying referenced table with inner join
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "name": "flute",
+  *       "orchestral_sections": {"name": "woodwinds"}
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @exampleDescription Switching schemas per query
+  * In addition to setting the schema during initialization, you can also switch schemas on a per-query basis.
+  * Make sure you've set up your [database privileges and API settings](/docs/guides/api/using-custom-schemas).
+  *
+  * @example Switching schemas per query
+  * ```ts
+  * const { data, error } = await supabase
+  *   .schema('myschema')
+  *   .from('mytable')
+  *   .select()
+  * ```
+  *
+  * @exampleSql Switching schemas per query
+  * ```sql
+  * create schema myschema;
+  *
+  * create table myschema.mytable (
+  *   id uuid primary key default gen_random_uuid(),
+  *   data text
+  * );
+  *
+  * insert into myschema.mytable (data) values ('mydata');
+  * ```
+  *
+  * @exampleResponse Switching schemas per query
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": "4162e008-27b0-4c0f-82dc-ccaeee9a624d",
+  *       "data": "mydata"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   select(columns, options) {
     const { head: head2 = false, count } = options !== null && options !== void 0 ? options : {};
@@ -1094,7 +3948,8 @@ var PostgrestQueryBuilder = class {
       url,
       headers,
       schema: this.schema,
-      fetch: this.fetch
+      fetch: this.fetch,
+      urlLengthLimit: this.urlLengthLimit
     });
   }
   /**
@@ -1122,6 +3977,91 @@ var PostgrestQueryBuilder = class {
   * @param options.defaultToNull - Make missing fields default to `null`.
   * Otherwise, use the default value for the column. Only applies for bulk
   * inserts.
+  *
+  * @category Database
+  *
+  * @example Create a record
+  * ```ts
+  * const { error } = await supabase
+  *   .from('countries')
+  *   .insert({ id: 1, name: 'Mordor' })
+  * ```
+  *
+  * @exampleSql Create a record
+  * ```sql
+  * create table
+  *   countries (id int8 primary key, name text);
+  * ```
+  *
+  * @exampleResponse Create a record
+  * ```json
+  * {
+  *   "status": 201,
+  *   "statusText": "Created"
+  * }
+  * ```
+  *
+  * @example Create a record and return it
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('countries')
+  *   .insert({ id: 1, name: 'Mordor' })
+  *   .select()
+  * ```
+  *
+  * @exampleSql Create a record and return it
+  * ```sql
+  * create table
+  *   countries (id int8 primary key, name text);
+  * ```
+  *
+  * @exampleResponse Create a record and return it
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 1,
+  *       "name": "Mordor"
+  *     }
+  *   ],
+  *   "status": 201,
+  *   "statusText": "Created"
+  * }
+  * ```
+  *
+  * @exampleDescription Bulk create
+  * A bulk create operation is handled in a single transaction.
+  * If any of the inserts fail, none of the rows are inserted.
+  *
+  * @example Bulk create
+  * ```ts
+  * const { error } = await supabase
+  *   .from('countries')
+  *   .insert([
+  *     { id: 1, name: 'Mordor' },
+  *     { id: 1, name: 'The Shire' },
+  *   ])
+  * ```
+  *
+  * @exampleSql Bulk create
+  * ```sql
+  * create table
+  *   countries (id int8 primary key, name text);
+  * ```
+  *
+  * @exampleResponse Bulk create
+  * ```json
+  * {
+  *   "error": {
+  *     "code": "23505",
+  *     "details": "Key (id)=(1) already exists.",
+  *     "hint": null,
+  *     "message": "duplicate key value violates unique constraint \"countries_pkey\""
+  *   },
+  *   "status": 409,
+  *   "statusText": "Conflict"
+  * }
+  * ```
   */
   insert(values, { count, defaultToNull = true } = {}) {
     var _this$fetch;
@@ -1142,7 +4082,8 @@ var PostgrestQueryBuilder = class {
       headers,
       schema: this.schema,
       body: values,
-      fetch: (_this$fetch = this.fetch) !== null && _this$fetch !== void 0 ? _this$fetch : fetch
+      fetch: (_this$fetch = this.fetch) !== null && _this$fetch !== void 0 ? _this$fetch : fetch,
+      urlLengthLimit: this.urlLengthLimit
     });
   }
   /**
@@ -1229,6 +4170,129 @@ var PostgrestQueryBuilder = class {
   * //   error: null
   * // }
   * ```
+  *
+  * @category Database
+  *
+  * @remarks
+  * - Primary keys must be included in `values` to use upsert.
+  *
+  * @example Upsert your data
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('instruments')
+  *   .upsert({ id: 1, name: 'piano' })
+  *   .select()
+  * ```
+  *
+  * @exampleSql Upsert your data
+  * ```sql
+  * create table
+  *   instruments (id int8 primary key, name text);
+  *
+  * insert into
+  *   instruments (id, name)
+  * values
+  *   (1, 'harpsichord');
+  * ```
+  *
+  * @exampleResponse Upsert your data
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 1,
+  *       "name": "piano"
+  *     }
+  *   ],
+  *   "status": 201,
+  *   "statusText": "Created"
+  * }
+  * ```
+  *
+  * @example Bulk Upsert your data
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('instruments')
+  *   .upsert([
+  *     { id: 1, name: 'piano' },
+  *     { id: 2, name: 'harp' },
+  *   ])
+  *   .select()
+  * ```
+  *
+  * @exampleSql Bulk Upsert your data
+  * ```sql
+  * create table
+  *   instruments (id int8 primary key, name text);
+  *
+  * insert into
+  *   instruments (id, name)
+  * values
+  *   (1, 'harpsichord');
+  * ```
+  *
+  * @exampleResponse Bulk Upsert your data
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 1,
+  *       "name": "piano"
+  *     },
+  *     {
+  *       "id": 2,
+  *       "name": "harp"
+  *     }
+  *   ],
+  *   "status": 201,
+  *   "statusText": "Created"
+  * }
+  * ```
+  *
+  * @exampleDescription Upserting into tables with constraints
+  * In the following query, `upsert()` implicitly uses the `id`
+  * (primary key) column to determine conflicts. If there is no existing
+  * row with the same `id`, `upsert()` inserts a new row, which
+  * will fail in this case as there is already a row with `handle` `"saoirse"`.
+  * Using the `onConflict` option, you can instruct `upsert()` to use
+  * another column with a unique constraint to determine conflicts.
+  *
+  * @example Upserting into tables with constraints
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('users')
+  *   .upsert({ id: 42, handle: 'saoirse', display_name: 'Saoirse' })
+  *   .select()
+  * ```
+  *
+  * @exampleSql Upserting into tables with constraints
+  * ```sql
+  * create table
+  *   users (
+  *     id int8 generated by default as identity primary key,
+  *     handle text not null unique,
+  *     display_name text
+  *   );
+  *
+  * insert into
+  *   users (id, handle, display_name)
+  * values
+  *   (1, 'saoirse', null);
+  * ```
+  *
+  * @exampleResponse Upserting into tables with constraints
+  * ```json
+  * {
+  *   "error": {
+  *     "code": "23505",
+  *     "details": "Key (handle)=(saoirse) already exists.",
+  *     "hint": null,
+  *     "message": "duplicate key value violates unique constraint \"users_handle_key\""
+  *   },
+  *   "status": 409,
+  *   "statusText": "Conflict"
+  * }
+  * ```
   */
   upsert(values, { onConflict, ignoreDuplicates = false, count, defaultToNull = true } = {}) {
     var _this$fetch2;
@@ -1251,7 +4315,8 @@ var PostgrestQueryBuilder = class {
       headers,
       schema: this.schema,
       body: values,
-      fetch: (_this$fetch2 = this.fetch) !== null && _this$fetch2 !== void 0 ? _this$fetch2 : fetch
+      fetch: (_this$fetch2 = this.fetch) !== null && _this$fetch2 !== void 0 ? _this$fetch2 : fetch,
+      urlLengthLimit: this.urlLengthLimit
     });
   }
   /**
@@ -1274,6 +4339,124 @@ var PostgrestQueryBuilder = class {
   *
   * `"estimated"`: Uses exact count for low numbers and planned count for high
   * numbers.
+  *
+  * @category Database
+  *
+  * @remarks
+  * - `update()` should always be combined with [Filters](/docs/reference/javascript/using-filters) to target the item(s) you wish to update.
+  *
+  * @example Updating your data
+  * ```ts
+  * const { error } = await supabase
+  *   .from('instruments')
+  *   .update({ name: 'piano' })
+  *   .eq('id', 1)
+  * ```
+  *
+  * @exampleSql Updating your data
+  * ```sql
+  * create table
+  *   instruments (id int8 primary key, name text);
+  *
+  * insert into
+  *   instruments (id, name)
+  * values
+  *   (1, 'harpsichord');
+  * ```
+  *
+  * @exampleResponse Updating your data
+  * ```json
+  * {
+  *   "status": 204,
+  *   "statusText": "No Content"
+  * }
+  * ```
+  *
+  * @example Update a record and return it
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('instruments')
+  *   .update({ name: 'piano' })
+  *   .eq('id', 1)
+  *   .select()
+  * ```
+  *
+  * @exampleSql Update a record and return it
+  * ```sql
+  * create table
+  *   instruments (id int8 primary key, name text);
+  *
+  * insert into
+  *   instruments (id, name)
+  * values
+  *   (1, 'harpsichord');
+  * ```
+  *
+  * @exampleResponse Update a record and return it
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 1,
+  *       "name": "piano"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @exampleDescription Updating JSON data
+  * Postgres offers some
+  * [operators](/docs/guides/database/json#query-the-jsonb-data) for
+  * working with JSON data. Currently, it is only possible to update the entire JSON document.
+  *
+  * @example Updating JSON data
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('users')
+  *   .update({
+  *     address: {
+  *       street: 'Melrose Place',
+  *       postcode: 90210
+  *     }
+  *   })
+  *   .eq('address->postcode', 90210)
+  *   .select()
+  * ```
+  *
+  * @exampleSql Updating JSON data
+  * ```sql
+  * create table
+  *   users (
+  *     id int8 primary key,
+  *     name text,
+  *     address jsonb
+  *   );
+  *
+  * insert into
+  *   users (id, name, address)
+  * values
+  *   (1, 'Michael', '{ "postcode": 90210 }');
+  * ```
+  *
+  * @exampleResponse Updating JSON data
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 1,
+  *       "name": "Michael",
+  *       "address": {
+  *         "street": "Melrose Place",
+  *         "postcode": 90210
+  *       }
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   update(values, { count } = {}) {
     var _this$fetch3;
@@ -1286,7 +4469,8 @@ var PostgrestQueryBuilder = class {
       headers,
       schema: this.schema,
       body: values,
-      fetch: (_this$fetch3 = this.fetch) !== null && _this$fetch3 !== void 0 ? _this$fetch3 : fetch
+      fetch: (_this$fetch3 = this.fetch) !== null && _this$fetch3 !== void 0 ? _this$fetch3 : fetch,
+      urlLengthLimit: this.urlLengthLimit
     });
   }
   /**
@@ -1307,6 +4491,105 @@ var PostgrestQueryBuilder = class {
   *
   * `"estimated"`: Uses exact count for low numbers and planned count for high
   * numbers.
+  *
+  * @category Database
+  *
+  * @remarks
+  * - `delete()` should always be combined with [filters](/docs/reference/javascript/using-filters) to target the item(s) you wish to delete.
+  * - If you use `delete()` with filters and you have
+  *   [RLS](/docs/learn/auth-deep-dive/auth-row-level-security) enabled, only
+  *   rows visible through `SELECT` policies are deleted. Note that by default
+  *   no rows are visible, so you need at least one `SELECT`/`ALL` policy that
+  *   makes the rows visible.
+  * - When using `delete().in()`, specify an array of values to target multiple rows with a single query. This is particularly useful for batch deleting entries that share common criteria, such as deleting users by their IDs. Ensure that the array you provide accurately represents all records you intend to delete to avoid unintended data removal.
+  *
+  * @example Delete a single record
+  * ```ts
+  * const response = await supabase
+  *   .from('countries')
+  *   .delete()
+  *   .eq('id', 1)
+  * ```
+  *
+  * @exampleSql Delete a single record
+  * ```sql
+  * create table
+  *   countries (id int8 primary key, name text);
+  *
+  * insert into
+  *   countries (id, name)
+  * values
+  *   (1, 'Mordor');
+  * ```
+  *
+  * @exampleResponse Delete a single record
+  * ```json
+  * {
+  *   "status": 204,
+  *   "statusText": "No Content"
+  * }
+  * ```
+  *
+  * @example Delete a record and return it
+  * ```ts
+  * const { data, error } = await supabase
+  *   .from('countries')
+  *   .delete()
+  *   .eq('id', 1)
+  *   .select()
+  * ```
+  *
+  * @exampleSql Delete a record and return it
+  * ```sql
+  * create table
+  *   countries (id int8 primary key, name text);
+  *
+  * insert into
+  *   countries (id, name)
+  * values
+  *   (1, 'Mordor');
+  * ```
+  *
+  * @exampleResponse Delete a record and return it
+  * ```json
+  * {
+  *   "data": [
+  *     {
+  *       "id": 1,
+  *       "name": "Mordor"
+  *     }
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @example Delete multiple records
+  * ```ts
+  * const response = await supabase
+  *   .from('countries')
+  *   .delete()
+  *   .in('id', [1, 2, 3])
+  * ```
+  *
+  * @exampleSql Delete multiple records
+  * ```sql
+  * create table
+  *   countries (id int8 primary key, name text);
+  *
+  * insert into
+  *   countries (id, name)
+  * values
+  *   (1, 'Rohan'), (2, 'The Shire'), (3, 'Mordor');
+  * ```
+  *
+  * @exampleResponse Delete multiple records
+  * ```json
+  * {
+  *   "status": 204,
+  *   "statusText": "No Content"
+  * }
+  * ```
   */
   delete({ count } = {}) {
     var _this$fetch4;
@@ -1318,10 +4601,62 @@ var PostgrestQueryBuilder = class {
       url,
       headers,
       schema: this.schema,
-      fetch: (_this$fetch4 = this.fetch) !== null && _this$fetch4 !== void 0 ? _this$fetch4 : fetch
+      fetch: (_this$fetch4 = this.fetch) !== null && _this$fetch4 !== void 0 ? _this$fetch4 : fetch,
+      urlLengthLimit: this.urlLengthLimit
     });
   }
 };
+function _typeof(o) {
+  "@babel/helpers - typeof";
+  return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(o$1) {
+    return typeof o$1;
+  } : function(o$1) {
+    return o$1 && "function" == typeof Symbol && o$1.constructor === Symbol && o$1 !== Symbol.prototype ? "symbol" : typeof o$1;
+  }, _typeof(o);
+}
+function toPrimitive(t, r) {
+  if ("object" != _typeof(t) || !t) return t;
+  var e = t[Symbol.toPrimitive];
+  if (void 0 !== e) {
+    var i = e.call(t, r || "default");
+    if ("object" != _typeof(i)) return i;
+    throw new TypeError("@@toPrimitive must return a primitive value.");
+  }
+  return ("string" === r ? String : Number)(t);
+}
+function toPropertyKey(t) {
+  var i = toPrimitive(t, "string");
+  return "symbol" == _typeof(i) ? i : i + "";
+}
+function _defineProperty(e, r, t) {
+  return (r = toPropertyKey(r)) in e ? Object.defineProperty(e, r, {
+    value: t,
+    enumerable: true,
+    configurable: true,
+    writable: true
+  }) : e[r] = t, e;
+}
+function ownKeys(e, r) {
+  var t = Object.keys(e);
+  if (Object.getOwnPropertySymbols) {
+    var o = Object.getOwnPropertySymbols(e);
+    r && (o = o.filter(function(r$1) {
+      return Object.getOwnPropertyDescriptor(e, r$1).enumerable;
+    })), t.push.apply(t, o);
+  }
+  return t;
+}
+function _objectSpread2(e) {
+  for (var r = 1; r < arguments.length; r++) {
+    var t = null != arguments[r] ? arguments[r] : {};
+    r % 2 ? ownKeys(Object(t), true).forEach(function(r$1) {
+      _defineProperty(e, r$1, t[r$1]);
+    }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys(Object(t)).forEach(function(r$1) {
+      Object.defineProperty(e, r$1, Object.getOwnPropertyDescriptor(t, r$1));
+    });
+  }
+  return e;
+}
 var PostgrestClient = class PostgrestClient2 {
   /**
   * Creates a PostgREST client.
@@ -1331,33 +4666,89 @@ var PostgrestClient = class PostgrestClient2 {
   * @param options.headers - Custom headers
   * @param options.schema - Postgres schema to switch to
   * @param options.fetch - Custom fetch
+  * @param options.timeout - Optional timeout in milliseconds for all requests. When set, requests will automatically abort after this duration to prevent indefinite hangs.
+  * @param options.urlLengthLimit - Maximum URL length in characters before warnings/errors are triggered. Defaults to 8000.
   * @example
   * ```ts
-  * import PostgrestClient from '@supabase/postgrest-js'
+  * import { PostgrestClient } from '@supabase/postgrest-js'
+  *
+  * const postgrest = new PostgrestClient('https://xyzcompany.supabase.co/rest/v1', {
+  *   headers: { apikey: 'public-anon-key' },
+  *   schema: 'public',
+  *   timeout: 30000, // 30 second timeout
+  * })
+  * ```
+  *
+  * @category Database
+  *
+  * @remarks
+  * - A `timeout` option (in milliseconds) can be set to automatically abort requests that take too long.
+  * - A `urlLengthLimit` option (default: 8000) can be set to control when URL length warnings are included in error messages for aborted requests.
+  *
+  * @example Example 1
+  * ```ts
+  * import { PostgrestClient } from '@supabase/postgrest-js'
   *
   * const postgrest = new PostgrestClient('https://xyzcompany.supabase.co/rest/v1', {
   *   headers: { apikey: 'public-anon-key' },
   *   schema: 'public',
   * })
   * ```
+  *
+  * @example With timeout
+  * ```ts
+  * import { PostgrestClient } from '@supabase/postgrest-js'
+  *
+  * const postgrest = new PostgrestClient('https://xyzcompany.supabase.co/rest/v1', {
+  *   headers: { apikey: 'public-anon-key' },
+  *   schema: 'public',
+  *   timeout: 30000, // 30 second timeout
+  * })
+  * ```
   */
-  constructor(url, { headers = {}, schema, fetch: fetch$1 } = {}) {
+  constructor(url, { headers = {}, schema, fetch: fetch$1, timeout, urlLengthLimit = 8e3 } = {}) {
     this.url = url;
     this.headers = new Headers(headers);
     this.schemaName = schema;
-    this.fetch = fetch$1;
+    this.urlLengthLimit = urlLengthLimit;
+    const originalFetch = fetch$1 !== null && fetch$1 !== void 0 ? fetch$1 : globalThis.fetch;
+    if (timeout !== void 0 && timeout > 0) this.fetch = (input, init) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      const existingSignal = init === null || init === void 0 ? void 0 : init.signal;
+      if (existingSignal) {
+        if (existingSignal.aborted) {
+          clearTimeout(timeoutId);
+          return originalFetch(input, init);
+        }
+        const abortHandler = () => {
+          clearTimeout(timeoutId);
+          controller.abort();
+        };
+        existingSignal.addEventListener("abort", abortHandler, { once: true });
+        return originalFetch(input, _objectSpread2(_objectSpread2({}, init), {}, { signal: controller.signal })).finally(() => {
+          clearTimeout(timeoutId);
+          existingSignal.removeEventListener("abort", abortHandler);
+        });
+      }
+      return originalFetch(input, _objectSpread2(_objectSpread2({}, init), {}, { signal: controller.signal })).finally(() => clearTimeout(timeoutId));
+    };
+    else this.fetch = originalFetch;
   }
   /**
   * Perform a query on a table or a view.
   *
   * @param relation - The table or view name to query
+  *
+  * @category Database
   */
   from(relation) {
     if (!relation || typeof relation !== "string" || relation.trim() === "") throw new Error("Invalid relation name: relation must be a non-empty string.");
     return new PostgrestQueryBuilder(new URL(`${this.url}/${relation}`), {
       headers: new Headers(this.headers),
       schema: this.schemaName,
-      fetch: this.fetch
+      fetch: this.fetch,
+      urlLengthLimit: this.urlLengthLimit
     });
   }
   /**
@@ -1366,12 +4757,15 @@ var PostgrestClient = class PostgrestClient2 {
   * The schema needs to be on the list of exposed schemas inside Supabase.
   *
   * @param schema - The schema to query
+  *
+  * @category Database
   */
   schema(schema) {
     return new PostgrestClient2(this.url, {
       headers: this.headers,
       schema,
-      fetch: this.fetch
+      fetch: this.fetch,
+      urlLengthLimit: this.urlLengthLimit
     });
   }
   /**
@@ -1405,6 +4799,139 @@ var PostgrestClient = class PostgrestClient2 {
   *   .rpc('function_a', {})
   *   .overrideTypes<{ id: string; user_id: string }[]>()
   * ```
+  *
+  * @category Database
+  *
+  * @example Call a Postgres function without arguments
+  * ```ts
+  * const { data, error } = await supabase.rpc('hello_world')
+  * ```
+  *
+  * @exampleSql Call a Postgres function without arguments
+  * ```sql
+  * create function hello_world() returns text as $$
+  *   select 'Hello world';
+  * $$ language sql;
+  * ```
+  *
+  * @exampleResponse Call a Postgres function without arguments
+  * ```json
+  * {
+  *   "data": "Hello world",
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @example Call a Postgres function with arguments
+  * ```ts
+  * const { data, error } = await supabase.rpc('echo', { say: '👋' })
+  * ```
+  *
+  * @exampleSql Call a Postgres function with arguments
+  * ```sql
+  * create function echo(say text) returns text as $$
+  *   select say;
+  * $$ language sql;
+  * ```
+  *
+  * @exampleResponse Call a Postgres function with arguments
+  * ```json
+  *   {
+  *     "data": "👋",
+  *     "status": 200,
+  *     "statusText": "OK"
+  *   }
+  *
+  * ```
+  *
+  * @exampleDescription Bulk processing
+  * You can process large payloads by passing in an array as an argument.
+  *
+  * @example Bulk processing
+  * ```ts
+  * const { data, error } = await supabase.rpc('add_one_each', { arr: [1, 2, 3] })
+  * ```
+  *
+  * @exampleSql Bulk processing
+  * ```sql
+  * create function add_one_each(arr int[]) returns int[] as $$
+  *   select array_agg(n + 1) from unnest(arr) as n;
+  * $$ language sql;
+  * ```
+  *
+  * @exampleResponse Bulk processing
+  * ```json
+  * {
+  *   "data": [
+  *     2,
+  *     3,
+  *     4
+  *   ],
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @exampleDescription Call a Postgres function with filters
+  * Postgres functions that return tables can also be combined with [Filters](/docs/reference/javascript/using-filters) and [Modifiers](/docs/reference/javascript/using-modifiers).
+  *
+  * @example Call a Postgres function with filters
+  * ```ts
+  * const { data, error } = await supabase
+  *   .rpc('list_stored_countries')
+  *   .eq('id', 1)
+  *   .single()
+  * ```
+  *
+  * @exampleSql Call a Postgres function with filters
+  * ```sql
+  * create table
+  *   countries (id int8 primary key, name text);
+  *
+  * insert into
+  *   countries (id, name)
+  * values
+  *   (1, 'Rohan'),
+  *   (2, 'The Shire');
+  *
+  * create function list_stored_countries() returns setof countries as $$
+  *   select * from countries;
+  * $$ language sql;
+  * ```
+  *
+  * @exampleResponse Call a Postgres function with filters
+  * ```json
+  * {
+  *   "data": {
+  *     "id": 1,
+  *     "name": "Rohan"
+  *   },
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
+  *
+  * @example Call a read-only Postgres function
+  * ```ts
+  * const { data, error } = await supabase.rpc('hello_world', undefined, { get: true })
+  * ```
+  *
+  * @exampleSql Call a read-only Postgres function
+  * ```sql
+  * create function hello_world() returns text as $$
+  *   select 'Hello world';
+  * $$ language sql;
+  * ```
+  *
+  * @exampleResponse Call a read-only Postgres function
+  * ```json
+  * {
+  *   "data": "Hello world",
+  *   "status": 200,
+  *   "statusText": "OK"
+  * }
+  * ```
   */
   rpc(fn, args = {}, { head: head2 = false, get: get2 = false, count } = {}) {
     var _this$fetch;
@@ -1434,7 +4961,8 @@ var PostgrestClient = class PostgrestClient2 {
       headers,
       schema: this.schemaName,
       body,
-      fetch: (_this$fetch = this.fetch) !== null && _this$fetch !== void 0 ? _this$fetch : fetch
+      fetch: (_this$fetch = this.fetch) !== null && _this$fetch !== void 0 ? _this$fetch : fetch,
+      urlLengthLimit: this.urlLengthLimit
     });
   }
 };
@@ -1556,7 +5084,7 @@ Suggested solution: ${env.workaround}`;
 var websocket_factory_default = WebSocketFactory;
 
 // node_modules/@supabase/realtime-js/dist/module/lib/version.js
-var version = "2.91.0";
+var version = "2.99.3";
 
 // node_modules/@supabase/realtime-js/dist/module/lib/constants.js
 var DEFAULT_VERSION = `realtime-js/${version}`;
@@ -2702,15 +6230,15 @@ var RealtimeChannel = class _RealtimeChannel {
       }).map((bind) => bind.callback(handledPayload, ref));
     } else {
       (_b = this.bindings[typeLower]) === null || _b === void 0 ? void 0 : _b.filter((bind) => {
-        var _a2, _b2, _c, _d, _e, _f, _g, _h;
+        var _a2, _b2, _c, _d, _e, _f;
         if (["broadcast", "presence", "postgres_changes"].includes(typeLower)) {
           if ("id" in bind) {
             const bindId = bind.id;
             const bindEvent = (_a2 = bind.filter) === null || _a2 === void 0 ? void 0 : _a2.event;
-            return bindId && ((_b2 = payload.ids) === null || _b2 === void 0 ? void 0 : _b2.includes(bindId)) && (bindEvent === "*" || (bindEvent === null || bindEvent === void 0 ? void 0 : bindEvent.toLocaleLowerCase()) === ((_c = payload.data) === null || _c === void 0 ? void 0 : _c.type.toLocaleLowerCase())) && (!((_d = bind.filter) === null || _d === void 0 ? void 0 : _d.table) || bind.filter.table === ((_e = payload.data) === null || _e === void 0 ? void 0 : _e.table));
+            return bindId && ((_b2 = payload.ids) === null || _b2 === void 0 ? void 0 : _b2.includes(bindId)) && (bindEvent === "*" || (bindEvent === null || bindEvent === void 0 ? void 0 : bindEvent.toLocaleLowerCase()) === ((_c = payload.data) === null || _c === void 0 ? void 0 : _c.type.toLocaleLowerCase()));
           } else {
-            const bindEvent = (_g = (_f = bind === null || bind === void 0 ? void 0 : bind.filter) === null || _f === void 0 ? void 0 : _f.event) === null || _g === void 0 ? void 0 : _g.toLocaleLowerCase();
-            return bindEvent === "*" || bindEvent === ((_h = payload === null || payload === void 0 ? void 0 : payload.event) === null || _h === void 0 ? void 0 : _h.toLocaleLowerCase());
+            const bindEvent = (_e = (_d = bind === null || bind === void 0 ? void 0 : bind.filter) === null || _d === void 0 ? void 0 : _d.event) === null || _e === void 0 ? void 0 : _e.toLocaleLowerCase();
+            return bindEvent === "*" || bindEvent === ((_f = payload === null || payload === void 0 ? void 0 : payload.event) === null || _f === void 0 ? void 0 : _f.toLocaleLowerCase());
           }
         } else {
           return bind.type.toLocaleLowerCase() === typeLower;
@@ -3362,6 +6890,18 @@ Option 2: Install and provide the "ws" package:
     this.log("transport", `connected to ${this.endpointURL()}`);
     const authPromise = this._authPromise || (this.accessToken && !this.accessTokenValue ? this.setAuth() : Promise.resolve());
     authPromise.then(() => {
+      if (this.accessTokenValue) {
+        this.channels.forEach((channel) => {
+          channel.updateJoinPayload({ access_token: this.accessTokenValue });
+        });
+        this.sendBuffer = [];
+        this.channels.forEach((channel) => {
+          if (channel._isJoining()) {
+            channel.joinPush.sent = false;
+            channel.joinPush.send();
+          }
+        });
+      }
       this.flushSendBuffer();
     }).catch((e) => {
       this.log("error", "error waiting for auth on connect", e);
@@ -3434,6 +6974,11 @@ Option 2: Install and provide the "ws" package:
     this.log("transport", `${error}`);
     this._triggerChanError();
     this._triggerStateCallbacks("error", error);
+    try {
+      this.heartbeatCallback("error");
+    } catch (e) {
+      this.log("error", "error in heartbeat callback", e);
+    }
   }
   /** @internal */
   _triggerChanError() {
@@ -4146,19 +7691,22 @@ var IcebergRestCatalog = class {
 
 // node_modules/@supabase/storage-js/dist/index.mjs
 var StorageError = class extends Error {
-  constructor(message) {
+  constructor(message, namespace = "storage", status, statusCode) {
     super(message);
     this.__isStorageError = true;
-    this.name = "StorageError";
+    this.namespace = namespace;
+    this.name = namespace === "vectors" ? "StorageVectorsError" : "StorageError";
+    this.status = status;
+    this.statusCode = statusCode;
   }
 };
 function isStorageError(error) {
   return typeof error === "object" && error !== null && "__isStorageError" in error;
 }
 var StorageApiError = class extends StorageError {
-  constructor(message, status, statusCode) {
-    super(message);
-    this.name = "StorageApiError";
+  constructor(message, status, statusCode, namespace = "storage") {
+    super(message, namespace, status, statusCode);
+    this.name = namespace === "vectors" ? "StorageVectorsApiError" : "StorageApiError";
     this.status = status;
     this.statusCode = statusCode;
   }
@@ -4172,18 +7720,29 @@ var StorageApiError = class extends StorageError {
   }
 };
 var StorageUnknownError = class extends StorageError {
-  constructor(message, originalError) {
-    super(message);
-    this.name = "StorageUnknownError";
+  constructor(message, originalError, namespace = "storage") {
+    super(message, namespace);
+    this.name = namespace === "vectors" ? "StorageVectorsUnknownError" : "StorageUnknownError";
     this.originalError = originalError;
   }
 };
-var resolveFetch$1 = (customFetch) => {
+var StorageVectorsErrorCode = (function(StorageVectorsErrorCode$1) {
+  StorageVectorsErrorCode$1["InternalError"] = "InternalError";
+  StorageVectorsErrorCode$1["S3VectorConflictException"] = "S3VectorConflictException";
+  StorageVectorsErrorCode$1["S3VectorNotFoundException"] = "S3VectorNotFoundException";
+  StorageVectorsErrorCode$1["S3VectorBucketNotEmpty"] = "S3VectorBucketNotEmpty";
+  StorageVectorsErrorCode$1["S3VectorMaxBucketsExceeded"] = "S3VectorMaxBucketsExceeded";
+  StorageVectorsErrorCode$1["S3VectorMaxIndexesExceeded"] = "S3VectorMaxIndexesExceeded";
+  return StorageVectorsErrorCode$1;
+})({});
+var resolveFetch2 = (customFetch) => {
   if (customFetch) return (...args) => customFetch(...args);
   return (...args) => fetch(...args);
 };
-var resolveResponse$1 = () => {
-  return Response;
+var isPlainObject = (value) => {
+  if (typeof value !== "object" || value === null) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return (prototype === null || prototype === Object.prototype || Object.getPrototypeOf(prototype) === null) && !(Symbol.toStringTag in value) && !(Symbol.iterator in value);
 };
 var recursiveToCamel = (item) => {
   if (Array.isArray(item)) return item.map((el) => recursiveToCamel(el));
@@ -4195,11 +7754,6 @@ var recursiveToCamel = (item) => {
   });
   return result;
 };
-var isPlainObject$1 = (value) => {
-  if (typeof value !== "object" || value === null) return false;
-  const prototype = Object.getPrototypeOf(value);
-  return (prototype === null || prototype === Object.prototype || Object.getPrototypeOf(prototype) === null) && !(Symbol.toStringTag in value) && !(Symbol.iterator in value);
-};
 var isValidBucketName = (bucketName) => {
   if (!bucketName || typeof bucketName !== "string") return false;
   if (bucketName.length === 0 || bucketName.length > 100) return false;
@@ -4207,37 +7761,37 @@ var isValidBucketName = (bucketName) => {
   if (bucketName.includes("/") || bucketName.includes("\\")) return false;
   return /^[\w!.\*'() &$@=;:+,?-]+$/.test(bucketName);
 };
-function _typeof(o) {
+function _typeof2(o) {
   "@babel/helpers - typeof";
-  return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(o$1) {
+  return _typeof2 = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(o$1) {
     return typeof o$1;
   } : function(o$1) {
     return o$1 && "function" == typeof Symbol && o$1.constructor === Symbol && o$1 !== Symbol.prototype ? "symbol" : typeof o$1;
-  }, _typeof(o);
+  }, _typeof2(o);
 }
-function toPrimitive(t, r) {
-  if ("object" != _typeof(t) || !t) return t;
+function toPrimitive2(t, r) {
+  if ("object" != _typeof2(t) || !t) return t;
   var e = t[Symbol.toPrimitive];
   if (void 0 !== e) {
     var i = e.call(t, r || "default");
-    if ("object" != _typeof(i)) return i;
+    if ("object" != _typeof2(i)) return i;
     throw new TypeError("@@toPrimitive must return a primitive value.");
   }
   return ("string" === r ? String : Number)(t);
 }
-function toPropertyKey(t) {
-  var i = toPrimitive(t, "string");
-  return "symbol" == _typeof(i) ? i : i + "";
+function toPropertyKey2(t) {
+  var i = toPrimitive2(t, "string");
+  return "symbol" == _typeof2(i) ? i : i + "";
 }
-function _defineProperty(e, r, t) {
-  return (r = toPropertyKey(r)) in e ? Object.defineProperty(e, r, {
+function _defineProperty2(e, r, t) {
+  return (r = toPropertyKey2(r)) in e ? Object.defineProperty(e, r, {
     value: t,
     enumerable: true,
     configurable: true,
     writable: true
   }) : e[r] = t, e;
 }
-function ownKeys(e, r) {
+function ownKeys2(e, r) {
   var t = Object.keys(e);
   if (Object.getOwnPropertySymbols) {
     var o = Object.getOwnPropertySymbols(e);
@@ -4247,68 +7801,163 @@ function ownKeys(e, r) {
   }
   return t;
 }
-function _objectSpread2(e) {
+function _objectSpread22(e) {
   for (var r = 1; r < arguments.length; r++) {
     var t = null != arguments[r] ? arguments[r] : {};
-    r % 2 ? ownKeys(Object(t), true).forEach(function(r$1) {
-      _defineProperty(e, r$1, t[r$1]);
-    }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys(Object(t)).forEach(function(r$1) {
+    r % 2 ? ownKeys2(Object(t), true).forEach(function(r$1) {
+      _defineProperty2(e, r$1, t[r$1]);
+    }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys2(Object(t)).forEach(function(r$1) {
       Object.defineProperty(e, r$1, Object.getOwnPropertyDescriptor(t, r$1));
     });
   }
   return e;
 }
-var _getErrorMessage$1 = (err) => {
+var _getErrorMessage = (err) => {
   var _err$error;
   return err.msg || err.message || err.error_description || (typeof err.error === "string" ? err.error : (_err$error = err.error) === null || _err$error === void 0 ? void 0 : _err$error.message) || JSON.stringify(err);
 };
-var handleError$1 = async (error, reject, options) => {
-  if (error instanceof await resolveResponse$1() && !(options === null || options === void 0 ? void 0 : options.noResolveJson)) error.json().then((err) => {
-    const status = error.status || 500;
-    const statusCode = (err === null || err === void 0 ? void 0 : err.statusCode) || status + "";
-    reject(new StorageApiError(_getErrorMessage$1(err), status, statusCode));
-  }).catch((err) => {
-    reject(new StorageUnknownError(_getErrorMessage$1(err), err));
-  });
-  else reject(new StorageUnknownError(_getErrorMessage$1(error), error));
+var handleError = async (error, reject, options, namespace) => {
+  if (error !== null && typeof error === "object" && typeof error.json === "function") {
+    const responseError = error;
+    let status = parseInt(responseError.status, 10);
+    if (!Number.isFinite(status)) status = 500;
+    responseError.json().then((err) => {
+      const statusCode = (err === null || err === void 0 ? void 0 : err.statusCode) || (err === null || err === void 0 ? void 0 : err.code) || status + "";
+      reject(new StorageApiError(_getErrorMessage(err), status, statusCode, namespace));
+    }).catch(() => {
+      const statusCode = status + "";
+      reject(new StorageApiError(responseError.statusText || `HTTP ${status} error`, status, statusCode, namespace));
+    });
+  } else reject(new StorageUnknownError(_getErrorMessage(error), error, namespace));
 };
-var _getRequestParams$1 = (method, options, parameters, body) => {
+var _getRequestParams = (method, options, parameters, body) => {
   const params = {
     method,
     headers: (options === null || options === void 0 ? void 0 : options.headers) || {}
   };
-  if (method === "GET" || !body) return params;
-  if (isPlainObject$1(body)) {
-    params.headers = _objectSpread2({ "Content-Type": "application/json" }, options === null || options === void 0 ? void 0 : options.headers);
+  if (method === "GET" || method === "HEAD" || !body) return _objectSpread22(_objectSpread22({}, params), parameters);
+  if (isPlainObject(body)) {
+    params.headers = _objectSpread22({ "Content-Type": "application/json" }, options === null || options === void 0 ? void 0 : options.headers);
     params.body = JSON.stringify(body);
   } else params.body = body;
   if (options === null || options === void 0 ? void 0 : options.duplex) params.duplex = options.duplex;
-  return _objectSpread2(_objectSpread2({}, params), parameters);
+  return _objectSpread22(_objectSpread22({}, params), parameters);
 };
-async function _handleRequest$1(fetcher, method, url, options, parameters, body) {
+async function _handleRequest(fetcher, method, url, options, parameters, body, namespace) {
   return new Promise((resolve, reject) => {
-    fetcher(url, _getRequestParams$1(method, options, parameters, body)).then((result) => {
+    fetcher(url, _getRequestParams(method, options, parameters, body)).then((result) => {
       if (!result.ok) throw result;
       if (options === null || options === void 0 ? void 0 : options.noResolveJson) return result;
+      if (namespace === "vectors") {
+        const contentType = result.headers.get("content-type");
+        if (result.headers.get("content-length") === "0" || result.status === 204) return {};
+        if (!contentType || !contentType.includes("application/json")) return {};
+      }
       return result.json();
-    }).then((data) => resolve(data)).catch((error) => handleError$1(error, reject, options));
+    }).then((data) => resolve(data)).catch((error) => handleError(error, reject, options, namespace));
   });
 }
-async function get(fetcher, url, options, parameters) {
-  return _handleRequest$1(fetcher, "GET", url, options, parameters);
+function createFetchApi(namespace = "storage") {
+  return {
+    get: async (fetcher, url, options, parameters) => {
+      return _handleRequest(fetcher, "GET", url, options, parameters, void 0, namespace);
+    },
+    post: async (fetcher, url, body, options, parameters) => {
+      return _handleRequest(fetcher, "POST", url, options, parameters, body, namespace);
+    },
+    put: async (fetcher, url, body, options, parameters) => {
+      return _handleRequest(fetcher, "PUT", url, options, parameters, body, namespace);
+    },
+    head: async (fetcher, url, options, parameters) => {
+      return _handleRequest(fetcher, "HEAD", url, _objectSpread22(_objectSpread22({}, options), {}, { noResolveJson: true }), parameters, void 0, namespace);
+    },
+    remove: async (fetcher, url, body, options, parameters) => {
+      return _handleRequest(fetcher, "DELETE", url, options, parameters, body, namespace);
+    }
+  };
 }
-async function post$1(fetcher, url, body, options, parameters) {
-  return _handleRequest$1(fetcher, "POST", url, options, parameters, body);
-}
-async function put(fetcher, url, body, options, parameters) {
-  return _handleRequest$1(fetcher, "PUT", url, options, parameters, body);
-}
-async function head(fetcher, url, options, parameters) {
-  return _handleRequest$1(fetcher, "HEAD", url, _objectSpread2(_objectSpread2({}, options), {}, { noResolveJson: true }), parameters);
-}
-async function remove(fetcher, url, body, options, parameters) {
-  return _handleRequest$1(fetcher, "DELETE", url, options, parameters, body);
-}
+var defaultApi = createFetchApi("storage");
+var { get, post, put, head, remove } = defaultApi;
+var vectorsApi = createFetchApi("vectors");
+var BaseApiClient = class {
+  /**
+  * Creates a new BaseApiClient instance
+  * @param url - Base URL for API requests
+  * @param headers - Default headers for API requests
+  * @param fetch - Optional custom fetch implementation
+  * @param namespace - Error namespace ('storage' or 'vectors')
+  */
+  constructor(url, headers = {}, fetch$1, namespace = "storage") {
+    this.shouldThrowOnError = false;
+    this.url = url;
+    this.headers = headers;
+    this.fetch = resolveFetch2(fetch$1);
+    this.namespace = namespace;
+  }
+  /**
+  * Enable throwing errors instead of returning them.
+  * When enabled, errors are thrown instead of returned in { data, error } format.
+  *
+  * @returns this - For method chaining
+  */
+  throwOnError() {
+    this.shouldThrowOnError = true;
+    return this;
+  }
+  /**
+  * Set an HTTP header for the request.
+  * Creates a shallow copy of headers to avoid mutating shared state.
+  *
+  * @param name - Header name
+  * @param value - Header value
+  * @returns this - For method chaining
+  */
+  setHeader(name, value) {
+    this.headers = _objectSpread22(_objectSpread22({}, this.headers), {}, { [name]: value });
+    return this;
+  }
+  /**
+  * Handles API operation with standardized error handling
+  * Eliminates repetitive try-catch blocks across all API methods
+  *
+  * This wrapper:
+  * 1. Executes the operation
+  * 2. Returns { data, error: null } on success
+  * 3. Returns { data: null, error } on failure (if shouldThrowOnError is false)
+  * 4. Throws error on failure (if shouldThrowOnError is true)
+  *
+  * @typeParam T - The expected data type from the operation
+  * @param operation - Async function that performs the API call
+  * @returns Promise with { data, error } tuple
+  *
+  * @example
+  * ```typescript
+  * async listBuckets() {
+  *   return this.handleOperation(async () => {
+  *     return await get(this.fetch, `${this.url}/bucket`, {
+  *       headers: this.headers,
+  *     })
+  *   })
+  * }
+  * ```
+  */
+  async handleOperation(operation) {
+    var _this = this;
+    try {
+      return {
+        data: await operation(),
+        error: null
+      };
+    } catch (error) {
+      if (_this.shouldThrowOnError) throw error;
+      if (isStorageError(error)) return {
+        data: null,
+        error
+      };
+      throw error;
+    }
+  }
+};
 var StreamDownloadBuilder = class {
   constructor(downloadFn, shouldThrowOnError) {
     this.downloadFn = downloadFn;
@@ -4389,22 +8038,10 @@ var DEFAULT_FILE_OPTIONS = {
   contentType: "text/plain;charset=UTF-8",
   upsert: false
 };
-var StorageFileApi = class {
+var StorageFileApi = class extends BaseApiClient {
   constructor(url, headers = {}, bucketId, fetch$1) {
-    this.shouldThrowOnError = false;
-    this.url = url;
-    this.headers = headers;
+    super(url, headers, fetch$1, "storage");
     this.bucketId = bucketId;
-    this.fetch = resolveFetch$1(fetch$1);
-  }
-  /**
-  * Enable throwing errors instead of returning them.
-  *
-  * @category File Buckets
-  */
-  throwOnError() {
-    this.shouldThrowOnError = true;
-    return this;
   }
   /**
   * Uploads a file to an existing bucket or replaces an existing file at the specified path with a new one.
@@ -4415,10 +8052,10 @@ var StorageFileApi = class {
   */
   async uploadOrUpdate(method, path, fileBody, fileOptions) {
     var _this = this;
-    try {
+    return _this.handleOperation(async () => {
       let body;
-      const options = _objectSpread2(_objectSpread2({}, DEFAULT_FILE_OPTIONS), fileOptions);
-      let headers = _objectSpread2(_objectSpread2({}, _this.headers), method === "POST" && { "x-upsert": String(options.upsert) });
+      const options = _objectSpread22(_objectSpread22({}, DEFAULT_FILE_OPTIONS), fileOptions);
+      let headers = _objectSpread22(_objectSpread22({}, _this.headers), method === "POST" && { "x-upsert": String(options.upsert) });
       const metadata = options.metadata;
       if (typeof Blob !== "undefined" && fileBody instanceof Blob) {
         body = new FormData();
@@ -4436,26 +8073,16 @@ var StorageFileApi = class {
         if (metadata) headers["x-metadata"] = _this.toBase64(_this.encodeMetadata(metadata));
         if ((typeof ReadableStream !== "undefined" && body instanceof ReadableStream || body && typeof body === "object" && "pipe" in body && typeof body.pipe === "function") && !options.duplex) options.duplex = "half";
       }
-      if (fileOptions === null || fileOptions === void 0 ? void 0 : fileOptions.headers) headers = _objectSpread2(_objectSpread2({}, headers), fileOptions.headers);
+      if (fileOptions === null || fileOptions === void 0 ? void 0 : fileOptions.headers) headers = _objectSpread22(_objectSpread22({}, headers), fileOptions.headers);
       const cleanPath = _this._removeEmptyFolders(path);
       const _path = _this._getFinalPath(cleanPath);
-      const data = await (method == "PUT" ? put : post$1)(_this.fetch, `${_this.url}/object/${_path}`, body, _objectSpread2({ headers }, (options === null || options === void 0 ? void 0 : options.duplex) ? { duplex: options.duplex } : {}));
+      const data = await (method == "PUT" ? put : post)(_this.fetch, `${_this.url}/object/${_path}`, body, _objectSpread22({ headers }, (options === null || options === void 0 ? void 0 : options.duplex) ? { duplex: options.duplex } : {}));
       return {
-        data: {
-          path: cleanPath,
-          id: data.Id,
-          fullPath: data.Key
-        },
-        error: null
+        path: cleanPath,
+        id: data.Id,
+        fullPath: data.Key
       };
-    } catch (error) {
-      if (_this.shouldThrowOnError) throw error;
-      if (isStorageError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    });
   }
   /**
   * Uploads a file to an existing bucket.
@@ -4541,10 +8168,10 @@ var StorageFileApi = class {
     const _path = _this3._getFinalPath(cleanPath);
     const url = new URL(_this3.url + `/object/upload/sign/${_path}`);
     url.searchParams.set("token", token);
-    try {
+    return _this3.handleOperation(async () => {
       let body;
-      const options = _objectSpread2({ upsert: DEFAULT_FILE_OPTIONS.upsert }, fileOptions);
-      const headers = _objectSpread2(_objectSpread2({}, _this3.headers), { "x-upsert": String(options.upsert) });
+      const options = _objectSpread22({ upsert: DEFAULT_FILE_OPTIONS.upsert }, fileOptions);
+      const headers = _objectSpread22(_objectSpread22({}, _this3.headers), { "x-upsert": String(options.upsert) });
       if (typeof Blob !== "undefined" && fileBody instanceof Blob) {
         body = new FormData();
         body.append("cacheControl", options.cacheControl);
@@ -4558,20 +8185,10 @@ var StorageFileApi = class {
         headers["content-type"] = options.contentType;
       }
       return {
-        data: {
-          path: cleanPath,
-          fullPath: (await put(_this3.fetch, url.toString(), body, { headers })).Key
-        },
-        error: null
+        path: cleanPath,
+        fullPath: (await put(_this3.fetch, url.toString(), body, { headers })).Key
       };
-    } catch (error) {
-      if (_this3.shouldThrowOnError) throw error;
-      if (isStorageError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    });
   }
   /**
   * Creates a signed upload URL.
@@ -4605,30 +8222,20 @@ var StorageFileApi = class {
   */
   async createSignedUploadUrl(path, options) {
     var _this4 = this;
-    try {
+    return _this4.handleOperation(async () => {
       let _path = _this4._getFinalPath(path);
-      const headers = _objectSpread2({}, _this4.headers);
+      const headers = _objectSpread22({}, _this4.headers);
       if (options === null || options === void 0 ? void 0 : options.upsert) headers["x-upsert"] = "true";
-      const data = await post$1(_this4.fetch, `${_this4.url}/object/upload/sign/${_path}`, {}, { headers });
+      const data = await post(_this4.fetch, `${_this4.url}/object/upload/sign/${_path}`, {}, { headers });
       const url = new URL(_this4.url + data.url);
       const token = url.searchParams.get("token");
       if (!token) throw new StorageError("No token returned by API");
       return {
-        data: {
-          signedUrl: url.toString(),
-          path,
-          token
-        },
-        error: null
+        signedUrl: url.toString(),
+        path,
+        token
       };
-    } catch (error) {
-      if (_this4.shouldThrowOnError) throw error;
-      if (isStorageError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    });
   }
   /**
   * Replaces an existing file at the specified path with a new one.
@@ -4706,24 +8313,14 @@ var StorageFileApi = class {
   */
   async move(fromPath, toPath, options) {
     var _this6 = this;
-    try {
-      return {
-        data: await post$1(_this6.fetch, `${_this6.url}/object/move`, {
-          bucketId: _this6.bucketId,
-          sourceKey: fromPath,
-          destinationKey: toPath,
-          destinationBucket: options === null || options === void 0 ? void 0 : options.destinationBucket
-        }, { headers: _this6.headers }),
-        error: null
-      };
-    } catch (error) {
-      if (_this6.shouldThrowOnError) throw error;
-      if (isStorageError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    return _this6.handleOperation(async () => {
+      return await post(_this6.fetch, `${_this6.url}/object/move`, {
+        bucketId: _this6.bucketId,
+        sourceKey: fromPath,
+        destinationKey: toPath,
+        destinationBucket: options === null || options === void 0 ? void 0 : options.destinationBucket
+      }, { headers: _this6.headers });
+    });
   }
   /**
   * Copies an existing file to a new path in the same bucket.
@@ -4754,24 +8351,14 @@ var StorageFileApi = class {
   */
   async copy(fromPath, toPath, options) {
     var _this7 = this;
-    try {
-      return {
-        data: { path: (await post$1(_this7.fetch, `${_this7.url}/object/copy`, {
-          bucketId: _this7.bucketId,
-          sourceKey: fromPath,
-          destinationKey: toPath,
-          destinationBucket: options === null || options === void 0 ? void 0 : options.destinationBucket
-        }, { headers: _this7.headers })).Key },
-        error: null
-      };
-    } catch (error) {
-      if (_this7.shouldThrowOnError) throw error;
-      if (isStorageError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    return _this7.handleOperation(async () => {
+      return { path: (await post(_this7.fetch, `${_this7.url}/object/copy`, {
+        bucketId: _this7.bucketId,
+        sourceKey: fromPath,
+        destinationKey: toPath,
+        destinationBucket: options === null || options === void 0 ? void 0 : options.destinationBucket
+      }, { headers: _this7.headers })).Key };
+    });
   }
   /**
   * Creates a signed URL. Use a signed URL to share a file for a fixed amount of time.
@@ -4826,23 +8413,14 @@ var StorageFileApi = class {
   */
   async createSignedUrl(path, expiresIn, options) {
     var _this8 = this;
-    try {
+    return _this8.handleOperation(async () => {
       let _path = _this8._getFinalPath(path);
-      let data = await post$1(_this8.fetch, `${_this8.url}/object/sign/${_path}`, _objectSpread2({ expiresIn }, (options === null || options === void 0 ? void 0 : options.transform) ? { transform: options.transform } : {}), { headers: _this8.headers });
+      const hasTransform = typeof (options === null || options === void 0 ? void 0 : options.transform) === "object" && options.transform !== null && Object.keys(options.transform).length > 0;
+      let data = await post(_this8.fetch, `${_this8.url}/object/sign/${_path}`, _objectSpread22({ expiresIn }, hasTransform ? { transform: options.transform } : {}), { headers: _this8.headers });
       const downloadQueryParam = (options === null || options === void 0 ? void 0 : options.download) ? `&download=${options.download === true ? "" : options.download}` : "";
-      data = { signedUrl: encodeURI(`${_this8.url}${data.signedURL}${downloadQueryParam}`) };
-      return {
-        data,
-        error: null
-      };
-    } catch (error) {
-      if (_this8.shouldThrowOnError) throw error;
-      if (isStorageError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+      const returnedPath = hasTransform && data.signedURL.includes("/object/sign/") ? data.signedURL.replace("/object/sign/", "/render/image/sign/") : data.signedURL;
+      return { signedUrl: encodeURI(`${_this8.url}${returnedPath}${downloadQueryParam}`) };
+    });
   }
   /**
   * Creates multiple signed URLs. Use a signed URL to share a file for a fixed amount of time.
@@ -4884,24 +8462,14 @@ var StorageFileApi = class {
   */
   async createSignedUrls(paths, expiresIn, options) {
     var _this9 = this;
-    try {
-      const data = await post$1(_this9.fetch, `${_this9.url}/object/sign/${_this9.bucketId}`, {
+    return _this9.handleOperation(async () => {
+      const data = await post(_this9.fetch, `${_this9.url}/object/sign/${_this9.bucketId}`, {
         expiresIn,
         paths
       }, { headers: _this9.headers });
       const downloadQueryParam = (options === null || options === void 0 ? void 0 : options.download) ? `&download=${options.download === true ? "" : options.download}` : "";
-      return {
-        data: data.map((datum) => _objectSpread2(_objectSpread2({}, datum), {}, { signedUrl: datum.signedURL ? encodeURI(`${_this9.url}${datum.signedURL}${downloadQueryParam}`) : null })),
-        error: null
-      };
-    } catch (error) {
-      if (_this9.shouldThrowOnError) throw error;
-      if (isStorageError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+      return data.map((datum) => _objectSpread22(_objectSpread22({}, datum), {}, { signedUrl: datum.signedURL ? encodeURI(`${_this9.url}${datum.signedURL}${downloadQueryParam}`) : null }));
+    });
   }
   /**
   * Downloads a file from a private bucket. For public buckets, make a request to the URL returned from `getPublicUrl` instead.
@@ -4909,6 +8477,7 @@ var StorageFileApi = class {
   * @category File Buckets
   * @param path The full path and file name of the file to be downloaded. For example `folder/image.png`.
   * @param options.transform Transform the asset before serving it to the client.
+  * @param parameters Additional fetch parameters like signal for cancellation. Supports standard fetch options including cache control.
   * @returns BlobDownloadBuilder instance for downloading the file
   *
   * @example Download file
@@ -4940,8 +8509,27 @@ var StorageFileApi = class {
   *     }
   *   })
   * ```
+  *
+  * @example Download with cache control (useful in Edge Functions)
+  * ```js
+  * const { data, error } = await supabase
+  *   .storage
+  *   .from('avatars')
+  *   .download('folder/avatar1.png', {}, { cache: 'no-store' })
+  * ```
+  *
+  * @example Download with abort signal
+  * ```js
+  * const controller = new AbortController()
+  * setTimeout(() => controller.abort(), 5000)
+  *
+  * const { data, error } = await supabase
+  *   .storage
+  *   .from('avatars')
+  *   .download('folder/avatar1.png', {}, { signal: controller.signal })
+  * ```
   */
-  download(path, options) {
+  download(path, options, parameters) {
     const renderPath = typeof (options === null || options === void 0 ? void 0 : options.transform) !== "undefined" ? "render/image/authenticated" : "object";
     const transformationQuery = this.transformOptsToQueryString((options === null || options === void 0 ? void 0 : options.transform) || {});
     const queryString = transformationQuery ? `?${transformationQuery}` : "";
@@ -4949,11 +8537,14 @@ var StorageFileApi = class {
     const downloadFn = () => get(this.fetch, `${this.url}/${renderPath}/${_path}${queryString}`, {
       headers: this.headers,
       noResolveJson: true
-    });
+    }, parameters);
     return new BlobDownloadBuilder(downloadFn, this.shouldThrowOnError);
   }
   /**
   * Retrieves the details of an existing file.
+  *
+  * Returns detailed file metadata including size, content type, and timestamps.
+  * Note: The API returns `last_modified` field, not `updated_at`.
   *
   * @category File Buckets
   * @param path The file path, including the file name. For example `folder/image.png`.
@@ -4965,24 +8556,19 @@ var StorageFileApi = class {
   *   .storage
   *   .from('avatars')
   *   .info('folder/avatar1.png')
+  *
+  * if (data) {
+  *   console.log('Last modified:', data.lastModified)
+  *   console.log('Size:', data.size)
+  * }
   * ```
   */
   async info(path) {
     var _this10 = this;
     const _path = _this10._getFinalPath(path);
-    try {
-      return {
-        data: recursiveToCamel(await get(_this10.fetch, `${_this10.url}/object/info/${_path}`, { headers: _this10.headers })),
-        error: null
-      };
-    } catch (error) {
-      if (_this10.shouldThrowOnError) throw error;
-      if (isStorageError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    return _this10.handleOperation(async () => {
+      return recursiveToCamel(await get(_this10.fetch, `${_this10.url}/object/info/${_path}`, { headers: _this10.headers }));
+    });
   }
   /**
   * Checks the existence of a file.
@@ -5010,9 +8596,10 @@ var StorageFileApi = class {
       };
     } catch (error) {
       if (_this11.shouldThrowOnError) throw error;
-      if (isStorageError(error) && error instanceof StorageUnknownError) {
-        const originalError = error.originalError;
-        if ([400, 404].includes(originalError === null || originalError === void 0 ? void 0 : originalError.status)) return {
+      if (isStorageError(error)) {
+        var _error$originalError;
+        const status = error instanceof StorageApiError ? error.status : error instanceof StorageUnknownError ? (_error$originalError = error.originalError) === null || _error$originalError === void 0 ? void 0 : _error$originalError.status : void 0;
+        if (status !== void 0 && [400, 404].includes(status)) return {
           data: false,
           error
         };
@@ -5085,6 +8672,9 @@ var StorageFileApi = class {
   /**
   * Deletes files within the same bucket
   *
+  * Returns an array of FileObject entries for the deleted files. Note that deprecated
+  * fields like `bucket_id` may or may not be present in the response - do not rely on them.
+  *
   * @category File Buckets
   * @param paths An array of files to delete, including the path and file name. For example [`'folder/image.png'`].
   * @returns Promise with response containing array of deleted file objects or error
@@ -5107,19 +8697,9 @@ var StorageFileApi = class {
   */
   async remove(paths) {
     var _this12 = this;
-    try {
-      return {
-        data: await remove(_this12.fetch, `${_this12.url}/object/${_this12.bucketId}`, { prefixes: paths }, { headers: _this12.headers }),
-        error: null
-      };
-    } catch (error) {
-      if (_this12.shouldThrowOnError) throw error;
-      if (isStorageError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    return _this12.handleOperation(async () => {
+      return await remove(_this12.fetch, `${_this12.url}/object/${_this12.bucketId}`, { prefixes: paths }, { headers: _this12.headers });
+    });
   }
   /**
   * Get file metadata
@@ -5133,11 +8713,16 @@ var StorageFileApi = class {
   /**
   * Lists all the files and folders within a path of the bucket.
   *
+  * **Important:** For folder entries, fields like `id`, `updated_at`, `created_at`,
+  * `last_accessed_at`, and `metadata` will be `null`. Only files have these fields populated.
+  * Additionally, deprecated fields like `bucket_id`, `owner`, and `buckets` are NOT returned
+  * by this method.
+  *
   * @category File Buckets
   * @param path The folder path.
   * @param options Search options including limit (defaults to 100), offset, sortBy, and search
   * @param parameters Optional fetch parameters including signal for cancellation
-  * @returns Promise with response containing array of files or error
+  * @returns Promise with response containing array of files/folders or error
   *
   * @example List files in a bucket
   * ```js
@@ -5149,9 +8734,20 @@ var StorageFileApi = class {
   *     offset: 0,
   *     sortBy: { column: 'name', order: 'asc' },
   *   })
+  *
+  * // Handle files vs folders
+  * data?.forEach(item => {
+  *   if (item.id !== null) {
+  *     // It's a file
+  *     console.log('File:', item.name, 'Size:', item.metadata?.size)
+  *   } else {
+  *     // It's a folder
+  *     console.log('Folder:', item.name)
+  *   }
+  * })
   * ```
   *
-  * Response:
+  * Response (file entry):
   * ```json
   * {
   *   "data": [
@@ -5191,44 +8787,63 @@ var StorageFileApi = class {
   */
   async list(path, options, parameters) {
     var _this13 = this;
-    try {
-      const body = _objectSpread2(_objectSpread2(_objectSpread2({}, DEFAULT_SEARCH_OPTIONS), options), {}, { prefix: path || "" });
-      return {
-        data: await post$1(_this13.fetch, `${_this13.url}/object/list/${_this13.bucketId}`, body, { headers: _this13.headers }, parameters),
-        error: null
-      };
-    } catch (error) {
-      if (_this13.shouldThrowOnError) throw error;
-      if (isStorageError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    return _this13.handleOperation(async () => {
+      const body = _objectSpread22(_objectSpread22(_objectSpread22({}, DEFAULT_SEARCH_OPTIONS), options), {}, { prefix: path || "" });
+      return await post(_this13.fetch, `${_this13.url}/object/list/${_this13.bucketId}`, body, { headers: _this13.headers }, parameters);
+    });
   }
   /**
+  * Lists all the files and folders within a bucket using the V2 API with pagination support.
+  *
+  * **Important:** Folder entries in the `folders` array only contain `name` and optionally `key` —
+  * they have no `id`, timestamps, or `metadata` fields. Full file metadata is only available
+  * on entries in the `objects` array.
+  *
   * @experimental this method signature might change in the future
   *
   * @category File Buckets
-  * @param options search options
-  * @param parameters
+  * @param options Search options including prefix, cursor for pagination, limit, with_delimiter
+  * @param parameters Optional fetch parameters including signal for cancellation
+  * @returns Promise with response containing folders/objects arrays with pagination info or error
+  *
+  * @example List files with pagination
+  * ```js
+  * const { data, error } = await supabase
+  *   .storage
+  *   .from('avatars')
+  *   .listV2({
+  *     prefix: 'folder/',
+  *     limit: 100,
+  *   })
+  *
+  * // Handle pagination
+  * if (data?.hasNext) {
+  *   const nextPage = await supabase
+  *     .storage
+  *     .from('avatars')
+  *     .listV2({
+  *       prefix: 'folder/',
+  *       cursor: data.nextCursor,
+  *     })
+  * }
+  *
+  * // Handle files vs folders
+  * data?.objects.forEach(file => {
+  *   if (file.id !== null) {
+  *     console.log('File:', file.name, 'Size:', file.metadata?.size)
+  *   }
+  * })
+  * data?.folders.forEach(folder => {
+  *   console.log('Folder:', folder.name)
+  * })
+  * ```
   */
   async listV2(options, parameters) {
     var _this14 = this;
-    try {
-      const body = _objectSpread2({}, options);
-      return {
-        data: await post$1(_this14.fetch, `${_this14.url}/object/list-v2/${_this14.bucketId}`, body, { headers: _this14.headers }, parameters),
-        error: null
-      };
-    } catch (error) {
-      if (_this14.shouldThrowOnError) throw error;
-      if (isStorageError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    return _this14.handleOperation(async () => {
+      const body = _objectSpread22({}, options);
+      return await post(_this14.fetch, `${_this14.url}/object/list-v2/${_this14.bucketId}`, body, { headers: _this14.headers }, parameters);
+    });
   }
   encodeMetadata(metadata) {
     return JSON.stringify(metadata);
@@ -5253,27 +8868,17 @@ var StorageFileApi = class {
     return params.join("&");
   }
 };
-var version2 = "2.91.0";
-var DEFAULT_HEADERS$1 = { "X-Client-Info": `storage-js/${version2}` };
-var StorageBucketApi = class {
+var version2 = "2.99.3";
+var DEFAULT_HEADERS = { "X-Client-Info": `storage-js/${version2}` };
+var StorageBucketApi = class extends BaseApiClient {
   constructor(url, headers = {}, fetch$1, opts) {
-    this.shouldThrowOnError = false;
     const baseUrl = new URL(url);
     if (opts === null || opts === void 0 ? void 0 : opts.useNewHostname) {
       if (/supabase\.(co|in|red)$/.test(baseUrl.hostname) && !baseUrl.hostname.includes("storage.supabase.")) baseUrl.hostname = baseUrl.hostname.replace("supabase.", "storage.supabase.");
     }
-    this.url = baseUrl.href.replace(/\/$/, "");
-    this.headers = _objectSpread2(_objectSpread2({}, DEFAULT_HEADERS$1), headers);
-    this.fetch = resolveFetch$1(fetch$1);
-  }
-  /**
-  * Enable throwing errors instead of returning them.
-  *
-  * @category File Buckets
-  */
-  throwOnError() {
-    this.shouldThrowOnError = true;
-    return this;
+    const finalUrl = baseUrl.href.replace(/\/$/, "");
+    const finalHeaders = _objectSpread22(_objectSpread22({}, DEFAULT_HEADERS), headers);
+    super(finalUrl, finalHeaders, fetch$1, "storage");
   }
   /**
   * Retrieves the details of all Storage buckets within an existing project.
@@ -5309,20 +8914,10 @@ var StorageBucketApi = class {
   */
   async listBuckets(options) {
     var _this = this;
-    try {
+    return _this.handleOperation(async () => {
       const queryString = _this.listBucketOptionsToQueryString(options);
-      return {
-        data: await get(_this.fetch, `${_this.url}/bucket${queryString}`, { headers: _this.headers }),
-        error: null
-      };
-    } catch (error) {
-      if (_this.shouldThrowOnError) throw error;
-      if (isStorageError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+      return await get(_this.fetch, `${_this.url}/bucket${queryString}`, { headers: _this.headers });
+    });
   }
   /**
   * Retrieves the details of an existing Storage bucket.
@@ -5359,19 +8954,9 @@ var StorageBucketApi = class {
   */
   async getBucket(id) {
     var _this2 = this;
-    try {
-      return {
-        data: await get(_this2.fetch, `${_this2.url}/bucket/${id}`, { headers: _this2.headers }),
-        error: null
-      };
-    } catch (error) {
-      if (_this2.shouldThrowOnError) throw error;
-      if (isStorageError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    return _this2.handleOperation(async () => {
+      return await get(_this2.fetch, `${_this2.url}/bucket/${id}`, { headers: _this2.headers });
+    });
   }
   /**
   * Creates a new Storage bucket
@@ -5412,26 +8997,16 @@ var StorageBucketApi = class {
   */
   async createBucket(id, options = { public: false }) {
     var _this3 = this;
-    try {
-      return {
-        data: await post$1(_this3.fetch, `${_this3.url}/bucket`, {
-          id,
-          name: id,
-          type: options.type,
-          public: options.public,
-          file_size_limit: options.fileSizeLimit,
-          allowed_mime_types: options.allowedMimeTypes
-        }, { headers: _this3.headers }),
-        error: null
-      };
-    } catch (error) {
-      if (_this3.shouldThrowOnError) throw error;
-      if (isStorageError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    return _this3.handleOperation(async () => {
+      return await post(_this3.fetch, `${_this3.url}/bucket`, {
+        id,
+        name: id,
+        type: options.type,
+        public: options.public,
+        file_size_limit: options.fileSizeLimit,
+        allowed_mime_types: options.allowedMimeTypes
+      }, { headers: _this3.headers });
+    });
   }
   /**
   * Updates a Storage bucket
@@ -5470,25 +9045,15 @@ var StorageBucketApi = class {
   */
   async updateBucket(id, options) {
     var _this4 = this;
-    try {
-      return {
-        data: await put(_this4.fetch, `${_this4.url}/bucket/${id}`, {
-          id,
-          name: id,
-          public: options.public,
-          file_size_limit: options.fileSizeLimit,
-          allowed_mime_types: options.allowedMimeTypes
-        }, { headers: _this4.headers }),
-        error: null
-      };
-    } catch (error) {
-      if (_this4.shouldThrowOnError) throw error;
-      if (isStorageError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    return _this4.handleOperation(async () => {
+      return await put(_this4.fetch, `${_this4.url}/bucket/${id}`, {
+        id,
+        name: id,
+        public: options.public,
+        file_size_limit: options.fileSizeLimit,
+        allowed_mime_types: options.allowedMimeTypes
+      }, { headers: _this4.headers });
+    });
   }
   /**
   * Removes all objects inside a single bucket.
@@ -5516,19 +9081,9 @@ var StorageBucketApi = class {
   */
   async emptyBucket(id) {
     var _this5 = this;
-    try {
-      return {
-        data: await post$1(_this5.fetch, `${_this5.url}/bucket/${id}/empty`, {}, { headers: _this5.headers }),
-        error: null
-      };
-    } catch (error) {
-      if (_this5.shouldThrowOnError) throw error;
-      if (isStorageError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    return _this5.handleOperation(async () => {
+      return await post(_this5.fetch, `${_this5.url}/bucket/${id}/empty`, {}, { headers: _this5.headers });
+    });
   }
   /**
   * Deletes an existing bucket. A bucket can't be deleted with existing objects inside it.
@@ -5557,19 +9112,9 @@ var StorageBucketApi = class {
   */
   async deleteBucket(id) {
     var _this6 = this;
-    try {
-      return {
-        data: await remove(_this6.fetch, `${_this6.url}/bucket/${id}`, {}, { headers: _this6.headers }),
-        error: null
-      };
-    } catch (error) {
-      if (_this6.shouldThrowOnError) throw error;
-      if (isStorageError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    return _this6.handleOperation(async () => {
+      return await remove(_this6.fetch, `${_this6.url}/bucket/${id}`, {}, { headers: _this6.headers });
+    });
   }
   listBucketOptionsToQueryString(options) {
     const params = {};
@@ -5583,7 +9128,7 @@ var StorageBucketApi = class {
     return Object.keys(params).length > 0 ? "?" + new URLSearchParams(params).toString() : "";
   }
 };
-var StorageAnalyticsClient = class {
+var StorageAnalyticsClient = class extends BaseApiClient {
   /**
   * @alpha
   *
@@ -5602,25 +9147,9 @@ var StorageAnalyticsClient = class {
   * ```
   */
   constructor(url, headers = {}, fetch$1) {
-    this.shouldThrowOnError = false;
-    this.url = url.replace(/\/$/, "");
-    this.headers = _objectSpread2(_objectSpread2({}, DEFAULT_HEADERS$1), headers);
-    this.fetch = resolveFetch$1(fetch$1);
-  }
-  /**
-  * @alpha
-  *
-  * Enable throwing errors instead of returning them in the response
-  * When enabled, failed operations will throw instead of returning { data: null, error }
-  *
-  * **Public alpha:** This API is part of a public alpha release and may not be available to your account type.
-  *
-  * @category Analytics Buckets
-  * @returns This instance for method chaining
-  */
-  throwOnError() {
-    this.shouldThrowOnError = true;
-    return this;
+    const finalUrl = url.replace(/\/$/, "");
+    const finalHeaders = _objectSpread22(_objectSpread22({}, DEFAULT_HEADERS), headers);
+    super(finalUrl, finalHeaders, fetch$1, "storage");
   }
   /**
   * @alpha
@@ -5658,19 +9187,9 @@ var StorageAnalyticsClient = class {
   */
   async createBucket(name) {
     var _this = this;
-    try {
-      return {
-        data: await post$1(_this.fetch, `${_this.url}/bucket`, { name }, { headers: _this.headers }),
-        error: null
-      };
-    } catch (error) {
-      if (_this.shouldThrowOnError) throw error;
-      if (isStorageError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    return _this.handleOperation(async () => {
+      return await post(_this.fetch, `${_this.url}/bucket`, { name }, { headers: _this.headers });
+    });
   }
   /**
   * @alpha
@@ -5720,7 +9239,7 @@ var StorageAnalyticsClient = class {
   */
   async listBuckets(options) {
     var _this2 = this;
-    try {
+    return _this2.handleOperation(async () => {
       const queryParams = new URLSearchParams();
       if ((options === null || options === void 0 ? void 0 : options.limit) !== void 0) queryParams.set("limit", options.limit.toString());
       if ((options === null || options === void 0 ? void 0 : options.offset) !== void 0) queryParams.set("offset", options.offset.toString());
@@ -5729,18 +9248,8 @@ var StorageAnalyticsClient = class {
       if (options === null || options === void 0 ? void 0 : options.search) queryParams.set("search", options.search);
       const queryString = queryParams.toString();
       const url = queryString ? `${_this2.url}/bucket?${queryString}` : `${_this2.url}/bucket`;
-      return {
-        data: await get(_this2.fetch, url, { headers: _this2.headers }),
-        error: null
-      };
-    } catch (error) {
-      if (_this2.shouldThrowOnError) throw error;
-      if (isStorageError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+      return await get(_this2.fetch, url, { headers: _this2.headers });
+    });
   }
   /**
   * @alpha
@@ -5775,19 +9284,9 @@ var StorageAnalyticsClient = class {
   */
   async deleteBucket(bucketName) {
     var _this3 = this;
-    try {
-      return {
-        data: await remove(_this3.fetch, `${_this3.url}/bucket/${bucketName}`, {}, { headers: _this3.headers }),
-        error: null
-      };
-    } catch (error) {
-      if (_this3.shouldThrowOnError) throw error;
-      if (isStorageError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    return _this3.handleOperation(async () => {
+      return await remove(_this3.fetch, `${_this3.url}/bucket/${bucketName}`, {}, { headers: _this3.headers });
+    });
   }
   /**
   * @alpha
@@ -5945,380 +9444,133 @@ var StorageAnalyticsClient = class {
     } });
   }
 };
-var DEFAULT_HEADERS = {
-  "X-Client-Info": `storage-js/${version2}`,
-  "Content-Type": "application/json"
-};
-var StorageVectorsError = class extends Error {
-  constructor(message) {
-    super(message);
-    this.__isStorageVectorsError = true;
-    this.name = "StorageVectorsError";
-  }
-};
-function isStorageVectorsError(error) {
-  return typeof error === "object" && error !== null && "__isStorageVectorsError" in error;
-}
-var StorageVectorsApiError = class extends StorageVectorsError {
-  constructor(message, status, statusCode) {
-    super(message);
-    this.name = "StorageVectorsApiError";
-    this.status = status;
-    this.statusCode = statusCode;
-  }
-  toJSON() {
-    return {
-      name: this.name,
-      message: this.message,
-      status: this.status,
-      statusCode: this.statusCode
-    };
-  }
-};
-var StorageVectorsUnknownError = class extends StorageVectorsError {
-  constructor(message, originalError) {
-    super(message);
-    this.name = "StorageVectorsUnknownError";
-    this.originalError = originalError;
-  }
-};
-var StorageVectorsErrorCode = (function(StorageVectorsErrorCode$1) {
-  StorageVectorsErrorCode$1["InternalError"] = "InternalError";
-  StorageVectorsErrorCode$1["S3VectorConflictException"] = "S3VectorConflictException";
-  StorageVectorsErrorCode$1["S3VectorNotFoundException"] = "S3VectorNotFoundException";
-  StorageVectorsErrorCode$1["S3VectorBucketNotEmpty"] = "S3VectorBucketNotEmpty";
-  StorageVectorsErrorCode$1["S3VectorMaxBucketsExceeded"] = "S3VectorMaxBucketsExceeded";
-  StorageVectorsErrorCode$1["S3VectorMaxIndexesExceeded"] = "S3VectorMaxIndexesExceeded";
-  return StorageVectorsErrorCode$1;
-})({});
-var resolveFetch2 = (customFetch) => {
-  if (customFetch) return (...args) => customFetch(...args);
-  return (...args) => fetch(...args);
-};
-var isPlainObject = (value) => {
-  if (typeof value !== "object" || value === null) return false;
-  const prototype = Object.getPrototypeOf(value);
-  return (prototype === null || prototype === Object.prototype || Object.getPrototypeOf(prototype) === null) && !(Symbol.toStringTag in value) && !(Symbol.iterator in value);
-};
-var _getErrorMessage = (err) => err.msg || err.message || err.error_description || err.error || JSON.stringify(err);
-var handleError = async (error, reject, options) => {
-  if (error && typeof error === "object" && "status" in error && "ok" in error && typeof error.status === "number" && !(options === null || options === void 0 ? void 0 : options.noResolveJson)) {
-    const status = error.status || 500;
-    const responseError = error;
-    if (typeof responseError.json === "function") responseError.json().then((err) => {
-      const statusCode = (err === null || err === void 0 ? void 0 : err.statusCode) || (err === null || err === void 0 ? void 0 : err.code) || status + "";
-      reject(new StorageVectorsApiError(_getErrorMessage(err), status, statusCode));
-    }).catch(() => {
-      const statusCode = status + "";
-      reject(new StorageVectorsApiError(responseError.statusText || `HTTP ${status} error`, status, statusCode));
-    });
-    else {
-      const statusCode = status + "";
-      reject(new StorageVectorsApiError(responseError.statusText || `HTTP ${status} error`, status, statusCode));
-    }
-  } else reject(new StorageVectorsUnknownError(_getErrorMessage(error), error));
-};
-var _getRequestParams = (method, options, parameters, body) => {
-  const params = {
-    method,
-    headers: (options === null || options === void 0 ? void 0 : options.headers) || {}
-  };
-  if (method === "GET" || !body) return params;
-  if (isPlainObject(body)) {
-    params.headers = _objectSpread2({ "Content-Type": "application/json" }, options === null || options === void 0 ? void 0 : options.headers);
-    params.body = JSON.stringify(body);
-  } else params.body = body;
-  return _objectSpread2(_objectSpread2({}, params), parameters);
-};
-async function _handleRequest(fetcher, method, url, options, parameters, body) {
-  return new Promise((resolve, reject) => {
-    fetcher(url, _getRequestParams(method, options, parameters, body)).then((result) => {
-      if (!result.ok) throw result;
-      if (options === null || options === void 0 ? void 0 : options.noResolveJson) return result;
-      const contentType = result.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) return {};
-      return result.json();
-    }).then((data) => resolve(data)).catch((error) => handleError(error, reject, options));
-  });
-}
-async function post(fetcher, url, body, options, parameters) {
-  return _handleRequest(fetcher, "POST", url, options, parameters, body);
-}
-var VectorIndexApi = class {
+var VectorIndexApi = class extends BaseApiClient {
   /** Creates a new VectorIndexApi instance */
   constructor(url, headers = {}, fetch$1) {
-    this.shouldThrowOnError = false;
-    this.url = url.replace(/\/$/, "");
-    this.headers = _objectSpread2(_objectSpread2({}, DEFAULT_HEADERS), headers);
-    this.fetch = resolveFetch2(fetch$1);
-  }
-  /** Enable throwing errors instead of returning them in the response */
-  throwOnError() {
-    this.shouldThrowOnError = true;
-    return this;
+    const finalUrl = url.replace(/\/$/, "");
+    const finalHeaders = _objectSpread22(_objectSpread22({}, DEFAULT_HEADERS), {}, { "Content-Type": "application/json" }, headers);
+    super(finalUrl, finalHeaders, fetch$1, "vectors");
   }
   /** Creates a new vector index within a bucket */
   async createIndex(options) {
     var _this = this;
-    try {
-      return {
-        data: await post(_this.fetch, `${_this.url}/CreateIndex`, options, { headers: _this.headers }) || {},
-        error: null
-      };
-    } catch (error) {
-      if (_this.shouldThrowOnError) throw error;
-      if (isStorageVectorsError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    return _this.handleOperation(async () => {
+      return await vectorsApi.post(_this.fetch, `${_this.url}/CreateIndex`, options, { headers: _this.headers }) || {};
+    });
   }
   /** Retrieves metadata for a specific vector index */
   async getIndex(vectorBucketName, indexName) {
     var _this2 = this;
-    try {
-      return {
-        data: await post(_this2.fetch, `${_this2.url}/GetIndex`, {
-          vectorBucketName,
-          indexName
-        }, { headers: _this2.headers }),
-        error: null
-      };
-    } catch (error) {
-      if (_this2.shouldThrowOnError) throw error;
-      if (isStorageVectorsError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    return _this2.handleOperation(async () => {
+      return await vectorsApi.post(_this2.fetch, `${_this2.url}/GetIndex`, {
+        vectorBucketName,
+        indexName
+      }, { headers: _this2.headers });
+    });
   }
   /** Lists vector indexes within a bucket with optional filtering and pagination */
   async listIndexes(options) {
     var _this3 = this;
-    try {
-      return {
-        data: await post(_this3.fetch, `${_this3.url}/ListIndexes`, options, { headers: _this3.headers }),
-        error: null
-      };
-    } catch (error) {
-      if (_this3.shouldThrowOnError) throw error;
-      if (isStorageVectorsError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    return _this3.handleOperation(async () => {
+      return await vectorsApi.post(_this3.fetch, `${_this3.url}/ListIndexes`, options, { headers: _this3.headers });
+    });
   }
   /** Deletes a vector index and all its data */
   async deleteIndex(vectorBucketName, indexName) {
     var _this4 = this;
-    try {
-      return {
-        data: await post(_this4.fetch, `${_this4.url}/DeleteIndex`, {
-          vectorBucketName,
-          indexName
-        }, { headers: _this4.headers }) || {},
-        error: null
-      };
-    } catch (error) {
-      if (_this4.shouldThrowOnError) throw error;
-      if (isStorageVectorsError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    return _this4.handleOperation(async () => {
+      return await vectorsApi.post(_this4.fetch, `${_this4.url}/DeleteIndex`, {
+        vectorBucketName,
+        indexName
+      }, { headers: _this4.headers }) || {};
+    });
   }
 };
-var VectorDataApi = class {
+var VectorDataApi = class extends BaseApiClient {
   /** Creates a new VectorDataApi instance */
   constructor(url, headers = {}, fetch$1) {
-    this.shouldThrowOnError = false;
-    this.url = url.replace(/\/$/, "");
-    this.headers = _objectSpread2(_objectSpread2({}, DEFAULT_HEADERS), headers);
-    this.fetch = resolveFetch2(fetch$1);
-  }
-  /** Enable throwing errors instead of returning them in the response */
-  throwOnError() {
-    this.shouldThrowOnError = true;
-    return this;
+    const finalUrl = url.replace(/\/$/, "");
+    const finalHeaders = _objectSpread22(_objectSpread22({}, DEFAULT_HEADERS), {}, { "Content-Type": "application/json" }, headers);
+    super(finalUrl, finalHeaders, fetch$1, "vectors");
   }
   /** Inserts or updates vectors in batch (1-500 per request) */
   async putVectors(options) {
     var _this = this;
-    try {
-      if (options.vectors.length < 1 || options.vectors.length > 500) throw new Error("Vector batch size must be between 1 and 500 items");
-      return {
-        data: await post(_this.fetch, `${_this.url}/PutVectors`, options, { headers: _this.headers }) || {},
-        error: null
-      };
-    } catch (error) {
-      if (_this.shouldThrowOnError) throw error;
-      if (isStorageVectorsError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    if (options.vectors.length < 1 || options.vectors.length > 500) throw new Error("Vector batch size must be between 1 and 500 items");
+    return _this.handleOperation(async () => {
+      return await vectorsApi.post(_this.fetch, `${_this.url}/PutVectors`, options, { headers: _this.headers }) || {};
+    });
   }
   /** Retrieves vectors by their keys in batch */
   async getVectors(options) {
     var _this2 = this;
-    try {
-      return {
-        data: await post(_this2.fetch, `${_this2.url}/GetVectors`, options, { headers: _this2.headers }),
-        error: null
-      };
-    } catch (error) {
-      if (_this2.shouldThrowOnError) throw error;
-      if (isStorageVectorsError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    return _this2.handleOperation(async () => {
+      return await vectorsApi.post(_this2.fetch, `${_this2.url}/GetVectors`, options, { headers: _this2.headers });
+    });
   }
   /** Lists vectors in an index with pagination */
   async listVectors(options) {
     var _this3 = this;
-    try {
-      if (options.segmentCount !== void 0) {
-        if (options.segmentCount < 1 || options.segmentCount > 16) throw new Error("segmentCount must be between 1 and 16");
-        if (options.segmentIndex !== void 0) {
-          if (options.segmentIndex < 0 || options.segmentIndex >= options.segmentCount) throw new Error(`segmentIndex must be between 0 and ${options.segmentCount - 1}`);
-        }
+    if (options.segmentCount !== void 0) {
+      if (options.segmentCount < 1 || options.segmentCount > 16) throw new Error("segmentCount must be between 1 and 16");
+      if (options.segmentIndex !== void 0) {
+        if (options.segmentIndex < 0 || options.segmentIndex >= options.segmentCount) throw new Error(`segmentIndex must be between 0 and ${options.segmentCount - 1}`);
       }
-      return {
-        data: await post(_this3.fetch, `${_this3.url}/ListVectors`, options, { headers: _this3.headers }),
-        error: null
-      };
-    } catch (error) {
-      if (_this3.shouldThrowOnError) throw error;
-      if (isStorageVectorsError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
     }
+    return _this3.handleOperation(async () => {
+      return await vectorsApi.post(_this3.fetch, `${_this3.url}/ListVectors`, options, { headers: _this3.headers });
+    });
   }
   /** Queries for similar vectors using approximate nearest neighbor search */
   async queryVectors(options) {
     var _this4 = this;
-    try {
-      return {
-        data: await post(_this4.fetch, `${_this4.url}/QueryVectors`, options, { headers: _this4.headers }),
-        error: null
-      };
-    } catch (error) {
-      if (_this4.shouldThrowOnError) throw error;
-      if (isStorageVectorsError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    return _this4.handleOperation(async () => {
+      return await vectorsApi.post(_this4.fetch, `${_this4.url}/QueryVectors`, options, { headers: _this4.headers });
+    });
   }
   /** Deletes vectors by their keys in batch (1-500 per request) */
   async deleteVectors(options) {
     var _this5 = this;
-    try {
-      if (options.keys.length < 1 || options.keys.length > 500) throw new Error("Keys batch size must be between 1 and 500 items");
-      return {
-        data: await post(_this5.fetch, `${_this5.url}/DeleteVectors`, options, { headers: _this5.headers }) || {},
-        error: null
-      };
-    } catch (error) {
-      if (_this5.shouldThrowOnError) throw error;
-      if (isStorageVectorsError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    if (options.keys.length < 1 || options.keys.length > 500) throw new Error("Keys batch size must be between 1 and 500 items");
+    return _this5.handleOperation(async () => {
+      return await vectorsApi.post(_this5.fetch, `${_this5.url}/DeleteVectors`, options, { headers: _this5.headers }) || {};
+    });
   }
 };
-var VectorBucketApi = class {
+var VectorBucketApi = class extends BaseApiClient {
   /** Creates a new VectorBucketApi instance */
   constructor(url, headers = {}, fetch$1) {
-    this.shouldThrowOnError = false;
-    this.url = url.replace(/\/$/, "");
-    this.headers = _objectSpread2(_objectSpread2({}, DEFAULT_HEADERS), headers);
-    this.fetch = resolveFetch2(fetch$1);
-  }
-  /** Enable throwing errors instead of returning them in the response */
-  throwOnError() {
-    this.shouldThrowOnError = true;
-    return this;
+    const finalUrl = url.replace(/\/$/, "");
+    const finalHeaders = _objectSpread22(_objectSpread22({}, DEFAULT_HEADERS), {}, { "Content-Type": "application/json" }, headers);
+    super(finalUrl, finalHeaders, fetch$1, "vectors");
   }
   /** Creates a new vector bucket */
   async createBucket(vectorBucketName) {
     var _this = this;
-    try {
-      return {
-        data: await post(_this.fetch, `${_this.url}/CreateVectorBucket`, { vectorBucketName }, { headers: _this.headers }) || {},
-        error: null
-      };
-    } catch (error) {
-      if (_this.shouldThrowOnError) throw error;
-      if (isStorageVectorsError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    return _this.handleOperation(async () => {
+      return await vectorsApi.post(_this.fetch, `${_this.url}/CreateVectorBucket`, { vectorBucketName }, { headers: _this.headers }) || {};
+    });
   }
   /** Retrieves metadata for a specific vector bucket */
   async getBucket(vectorBucketName) {
     var _this2 = this;
-    try {
-      return {
-        data: await post(_this2.fetch, `${_this2.url}/GetVectorBucket`, { vectorBucketName }, { headers: _this2.headers }),
-        error: null
-      };
-    } catch (error) {
-      if (_this2.shouldThrowOnError) throw error;
-      if (isStorageVectorsError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    return _this2.handleOperation(async () => {
+      return await vectorsApi.post(_this2.fetch, `${_this2.url}/GetVectorBucket`, { vectorBucketName }, { headers: _this2.headers });
+    });
   }
   /** Lists vector buckets with optional filtering and pagination */
   async listBuckets(options = {}) {
     var _this3 = this;
-    try {
-      return {
-        data: await post(_this3.fetch, `${_this3.url}/ListVectorBuckets`, options, { headers: _this3.headers }),
-        error: null
-      };
-    } catch (error) {
-      if (_this3.shouldThrowOnError) throw error;
-      if (isStorageVectorsError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    return _this3.handleOperation(async () => {
+      return await vectorsApi.post(_this3.fetch, `${_this3.url}/ListVectorBuckets`, options, { headers: _this3.headers });
+    });
   }
   /** Deletes a vector bucket (must be empty first) */
   async deleteBucket(vectorBucketName) {
     var _this4 = this;
-    try {
-      return {
-        data: await post(_this4.fetch, `${_this4.url}/DeleteVectorBucket`, { vectorBucketName }, { headers: _this4.headers }) || {},
-        error: null
-      };
-    } catch (error) {
-      if (_this4.shouldThrowOnError) throw error;
-      if (isStorageVectorsError(error)) return {
-        data: null,
-        error
-      };
-      throw error;
-    }
+    return _this4.handleOperation(async () => {
+      return await vectorsApi.post(_this4.fetch, `${_this4.url}/DeleteVectorBucket`, { vectorBucketName }, { headers: _this4.headers }) || {};
+    });
   }
 };
 var StorageVectorsClient = class extends VectorBucketApi {
@@ -6515,7 +9767,7 @@ var VectorBucketScope = class extends VectorIndexApi {
   */
   async createIndex(options) {
     var _superprop_getCreateIndex = () => super.createIndex, _this5 = this;
-    return _superprop_getCreateIndex().call(_this5, _objectSpread2(_objectSpread2({}, options), {}, { vectorBucketName: _this5.vectorBucketName }));
+    return _superprop_getCreateIndex().call(_this5, _objectSpread22(_objectSpread22({}, options), {}, { vectorBucketName: _this5.vectorBucketName }));
   }
   /**
   *
@@ -6538,7 +9790,7 @@ var VectorBucketScope = class extends VectorIndexApi {
   */
   async listIndexes(options = {}) {
     var _superprop_getListIndexes = () => super.listIndexes, _this6 = this;
-    return _superprop_getListIndexes().call(_this6, _objectSpread2(_objectSpread2({}, options), {}, { vectorBucketName: _this6.vectorBucketName }));
+    return _superprop_getListIndexes().call(_this6, _objectSpread22(_objectSpread22({}, options), {}, { vectorBucketName: _this6.vectorBucketName }));
   }
   /**
   *
@@ -6671,7 +9923,7 @@ var VectorIndexScope = class extends VectorDataApi {
   */
   async putVectors(options) {
     var _superprop_getPutVectors = () => super.putVectors, _this9 = this;
-    return _superprop_getPutVectors().call(_this9, _objectSpread2(_objectSpread2({}, options), {}, {
+    return _superprop_getPutVectors().call(_this9, _objectSpread22(_objectSpread22({}, options), {}, {
       vectorBucketName: _this9.vectorBucketName,
       indexName: _this9.indexName
     }));
@@ -6700,7 +9952,7 @@ var VectorIndexScope = class extends VectorDataApi {
   */
   async getVectors(options) {
     var _superprop_getGetVectors = () => super.getVectors, _this10 = this;
-    return _superprop_getGetVectors().call(_this10, _objectSpread2(_objectSpread2({}, options), {}, {
+    return _superprop_getGetVectors().call(_this10, _objectSpread22(_objectSpread22({}, options), {}, {
       vectorBucketName: _this10.vectorBucketName,
       indexName: _this10.indexName
     }));
@@ -6729,7 +9981,7 @@ var VectorIndexScope = class extends VectorDataApi {
   */
   async listVectors(options = {}) {
     var _superprop_getListVectors = () => super.listVectors, _this11 = this;
-    return _superprop_getListVectors().call(_this11, _objectSpread2(_objectSpread2({}, options), {}, {
+    return _superprop_getListVectors().call(_this11, _objectSpread22(_objectSpread22({}, options), {}, {
       vectorBucketName: _this11.vectorBucketName,
       indexName: _this11.indexName
     }));
@@ -6761,7 +10013,7 @@ var VectorIndexScope = class extends VectorDataApi {
   */
   async queryVectors(options) {
     var _superprop_getQueryVectors = () => super.queryVectors, _this12 = this;
-    return _superprop_getQueryVectors().call(_this12, _objectSpread2(_objectSpread2({}, options), {}, {
+    return _superprop_getQueryVectors().call(_this12, _objectSpread22(_objectSpread22({}, options), {}, {
       vectorBucketName: _this12.vectorBucketName,
       indexName: _this12.indexName
     }));
@@ -6789,7 +10041,7 @@ var VectorIndexScope = class extends VectorDataApi {
   */
   async deleteVectors(options) {
     var _superprop_getDeleteVectors = () => super.deleteVectors, _this13 = this;
-    return _superprop_getDeleteVectors().call(_this13, _objectSpread2(_objectSpread2({}, options), {}, {
+    return _superprop_getDeleteVectors().call(_this13, _objectSpread22(_objectSpread22({}, options), {}, {
       vectorBucketName: _this13.vectorBucketName,
       indexName: _this13.indexName
     }));
@@ -6861,7 +10113,7 @@ var StorageClient = class extends StorageBucketApi {
 };
 
 // node_modules/@supabase/auth-js/dist/module/lib/version.js
-var version3 = "2.91.0";
+var version3 = "2.99.3";
 
 // node_modules/@supabase/auth-js/dist/module/lib/constants.js
 var AUTO_REFRESH_TICK_DURATION_MS = 30 * 1e3;
@@ -7615,6 +10867,13 @@ var GoTrueAdminApi = class {
       deleteClient: this._deleteOAuthClient.bind(this),
       regenerateClientSecret: this._regenerateOAuthClientSecret.bind(this)
     };
+    this.customProviders = {
+      listProviders: this._listCustomProviders.bind(this),
+      createProvider: this._createCustomProvider.bind(this),
+      getProvider: this._getCustomProvider.bind(this),
+      updateProvider: this._updateCustomProvider.bind(this),
+      deleteProvider: this._deleteCustomProvider.bind(this)
+    };
   }
   /**
    * Removes a logged-in session.
@@ -7776,9 +11035,34 @@ var GoTrueAdminApi = class {
   /**
    * Updates the user data. Changes are applied directly without confirmation flows.
    *
+   * @param uid The user's unique identifier
    * @param attributes The data you want to update.
    *
    * This function should only be called on a server. Never expose your `service_role` key in the browser.
+   *
+   * @remarks
+   * **Important:** This is a server-side operation and does **not** trigger client-side
+   * `onAuthStateChange` listeners. The admin API has no connection to client state.
+   *
+   * To sync changes to the client after calling this method:
+   * 1. On the client, call `supabase.auth.refreshSession()` to fetch the updated user data
+   * 2. This will trigger the `TOKEN_REFRESHED` event and notify all listeners
+   *
+   * @example
+   * ```typescript
+   * // Server-side (Edge Function)
+   * const { data, error } = await supabase.auth.admin.updateUserById(
+   *   userId,
+   *   { user_metadata: { preferences: { theme: 'dark' } } }
+   * )
+   *
+   * // Client-side (to sync the changes)
+   * const { data, error } = await supabase.auth.refreshSession()
+   * // onAuthStateChange listeners will now be notified with updated user
+   * ```
+   *
+   * @see {@link GoTrueClient.refreshSession} for syncing admin changes to the client
+   * @see {@link GoTrueClient.updateUser} for client-side user updates (triggers listeners automatically)
    */
   async updateUserById(uid, attributes) {
     validateUUID(uid);
@@ -7999,6 +11283,124 @@ var GoTrueAdminApi = class {
       throw error;
     }
   }
+  /**
+   * Lists all custom providers with optional type filter.
+   *
+   * This function should only be called on a server. Never expose your `service_role` key in the browser.
+   */
+  async _listCustomProviders(params) {
+    try {
+      const query = {};
+      if (params === null || params === void 0 ? void 0 : params.type) {
+        query.type = params.type;
+      }
+      return await _request(this.fetch, "GET", `${this.url}/admin/custom-providers`, {
+        headers: this.headers,
+        query,
+        xform: (data) => {
+          var _a;
+          return { data: { providers: (_a = data === null || data === void 0 ? void 0 : data.providers) !== null && _a !== void 0 ? _a : [] }, error: null };
+        }
+      });
+    } catch (error) {
+      if (isAuthError(error)) {
+        return { data: { providers: [] }, error };
+      }
+      throw error;
+    }
+  }
+  /**
+   * Creates a new custom OIDC/OAuth provider.
+   *
+   * For OIDC providers, the server fetches and validates the OpenID Connect discovery document
+   * from the issuer's well-known endpoint (or the provided `discovery_url`) at creation time.
+   * This may return a validation error (`error_code: "validation_failed"`) if the discovery
+   * document is unreachable, not valid JSON, missing required fields, or if the issuer
+   * in the document does not match the expected issuer.
+   *
+   * This function should only be called on a server. Never expose your `service_role` key in the browser.
+   */
+  async _createCustomProvider(params) {
+    try {
+      return await _request(this.fetch, "POST", `${this.url}/admin/custom-providers`, {
+        body: params,
+        headers: this.headers,
+        xform: (provider) => {
+          return { data: provider, error: null };
+        }
+      });
+    } catch (error) {
+      if (isAuthError(error)) {
+        return { data: null, error };
+      }
+      throw error;
+    }
+  }
+  /**
+   * Gets details of a specific custom provider by identifier.
+   *
+   * This function should only be called on a server. Never expose your `service_role` key in the browser.
+   */
+  async _getCustomProvider(identifier) {
+    try {
+      return await _request(this.fetch, "GET", `${this.url}/admin/custom-providers/${identifier}`, {
+        headers: this.headers,
+        xform: (provider) => {
+          return { data: provider, error: null };
+        }
+      });
+    } catch (error) {
+      if (isAuthError(error)) {
+        return { data: null, error };
+      }
+      throw error;
+    }
+  }
+  /**
+   * Updates an existing custom provider.
+   *
+   * When `issuer` or `discovery_url` is changed on an OIDC provider, the server re-fetches and
+   * validates the discovery document before persisting. This may return a validation error
+   * (`error_code: "validation_failed"`) if the discovery document is unreachable, invalid, or
+   * the issuer does not match.
+   *
+   * This function should only be called on a server. Never expose your `service_role` key in the browser.
+   */
+  async _updateCustomProvider(identifier, params) {
+    try {
+      return await _request(this.fetch, "PUT", `${this.url}/admin/custom-providers/${identifier}`, {
+        body: params,
+        headers: this.headers,
+        xform: (provider) => {
+          return { data: provider, error: null };
+        }
+      });
+    } catch (error) {
+      if (isAuthError(error)) {
+        return { data: null, error };
+      }
+      throw error;
+    }
+  }
+  /**
+   * Deletes a custom provider.
+   *
+   * This function should only be called on a server. Never expose your `service_role` key in the browser.
+   */
+  async _deleteCustomProvider(identifier) {
+    try {
+      await _request(this.fetch, "DELETE", `${this.url}/admin/custom-providers/${identifier}`, {
+        headers: this.headers,
+        noResolveJson: true
+      });
+      return { data: null, error: null };
+    } catch (error) {
+      if (isAuthError(error)) {
+        return { data: null, error };
+      }
+      throw error;
+    }
+  }
 };
 
 // node_modules/@supabase/auth-js/dist/module/lib/local-storage.js
@@ -8038,82 +11440,146 @@ async function navigatorLock(name, acquireTimeout, fn) {
     console.log("@supabase/gotrue-js: navigatorLock: acquire lock", name, acquireTimeout);
   }
   const abortController = new globalThis.AbortController();
+  let acquireTimeoutTimer;
   if (acquireTimeout > 0) {
-    setTimeout(() => {
+    acquireTimeoutTimer = setTimeout(() => {
       abortController.abort();
       if (internals.debug) {
         console.log("@supabase/gotrue-js: navigatorLock acquire timed out", name);
       }
     }, acquireTimeout);
   }
-  return await Promise.resolve().then(() => globalThis.navigator.locks.request(name, acquireTimeout === 0 ? {
-    mode: "exclusive",
-    ifAvailable: true
-  } : {
-    mode: "exclusive",
-    signal: abortController.signal
-  }, async (lock) => {
-    if (lock) {
-      if (internals.debug) {
-        console.log("@supabase/gotrue-js: navigatorLock: acquired", name, lock.name);
-      }
-      try {
-        return await fn();
-      } finally {
+  await Promise.resolve();
+  try {
+    return await globalThis.navigator.locks.request(name, acquireTimeout === 0 ? {
+      mode: "exclusive",
+      ifAvailable: true
+    } : {
+      mode: "exclusive",
+      signal: abortController.signal
+    }, async (lock) => {
+      if (lock) {
+        clearTimeout(acquireTimeoutTimer);
         if (internals.debug) {
-          console.log("@supabase/gotrue-js: navigatorLock: released", name, lock.name);
+          console.log("@supabase/gotrue-js: navigatorLock: acquired", name, lock.name);
         }
-      }
-    } else {
-      if (acquireTimeout === 0) {
-        if (internals.debug) {
-          console.log("@supabase/gotrue-js: navigatorLock: not immediately available", name);
-        }
-        throw new NavigatorLockAcquireTimeoutError(`Acquiring an exclusive Navigator LockManager lock "${name}" immediately failed`);
-      } else {
-        if (internals.debug) {
-          try {
-            const result = await globalThis.navigator.locks.query();
-            console.log("@supabase/gotrue-js: Navigator LockManager state", JSON.stringify(result, null, "  "));
-          } catch (e) {
-            console.warn("@supabase/gotrue-js: Error when querying Navigator LockManager state", e);
+        try {
+          return await fn();
+        } finally {
+          if (internals.debug) {
+            console.log("@supabase/gotrue-js: navigatorLock: released", name, lock.name);
           }
         }
-        console.warn("@supabase/gotrue-js: Navigator LockManager returned a null lock when using #request without ifAvailable set to true, it appears this browser is not following the LockManager spec https://developer.mozilla.org/en-US/docs/Web/API/LockManager/request");
-        return await fn();
+      } else {
+        if (acquireTimeout === 0) {
+          if (internals.debug) {
+            console.log("@supabase/gotrue-js: navigatorLock: not immediately available", name);
+          }
+          throw new NavigatorLockAcquireTimeoutError(`Acquiring an exclusive Navigator LockManager lock "${name}" immediately failed`);
+        } else {
+          if (internals.debug) {
+            try {
+              const result = await globalThis.navigator.locks.query();
+              console.log("@supabase/gotrue-js: Navigator LockManager state", JSON.stringify(result, null, "  "));
+            } catch (e) {
+              console.warn("@supabase/gotrue-js: Error when querying Navigator LockManager state", e);
+            }
+          }
+          console.warn("@supabase/gotrue-js: Navigator LockManager returned a null lock when using #request without ifAvailable set to true, it appears this browser is not following the LockManager spec https://developer.mozilla.org/en-US/docs/Web/API/LockManager/request");
+          clearTimeout(acquireTimeoutTimer);
+          return await fn();
+        }
+      }
+    });
+  } catch (e) {
+    if (acquireTimeout > 0) {
+      clearTimeout(acquireTimeoutTimer);
+    }
+    if ((e === null || e === void 0 ? void 0 : e.name) === "AbortError" && acquireTimeout > 0) {
+      if (abortController.signal.aborted) {
+        if (internals.debug) {
+          console.log("@supabase/gotrue-js: navigatorLock: acquire timeout, recovering by stealing lock", name);
+        }
+        console.warn(`@supabase/gotrue-js: Lock "${name}" was not released within ${acquireTimeout}ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover.`);
+        return await Promise.resolve().then(() => globalThis.navigator.locks.request(name, {
+          mode: "exclusive",
+          steal: true
+        }, async (lock) => {
+          if (lock) {
+            if (internals.debug) {
+              console.log("@supabase/gotrue-js: navigatorLock: recovered (stolen)", name, lock.name);
+            }
+            try {
+              return await fn();
+            } finally {
+              if (internals.debug) {
+                console.log("@supabase/gotrue-js: navigatorLock: released (stolen)", name, lock.name);
+              }
+            }
+          } else {
+            console.warn("@supabase/gotrue-js: Navigator LockManager returned null lock even with steal: true");
+            return await fn();
+          }
+        }));
+      } else {
+        if (internals.debug) {
+          console.log("@supabase/gotrue-js: navigatorLock: lock was stolen by another request", name);
+        }
+        throw new NavigatorLockAcquireTimeoutError(`Lock "${name}" was released because another request stole it`);
       }
     }
-  }));
+    throw e;
+  }
 }
 var PROCESS_LOCKS = {};
 async function processLock(name, acquireTimeout, fn) {
   var _a;
   const previousOperation = (_a = PROCESS_LOCKS[name]) !== null && _a !== void 0 ? _a : Promise.resolve();
-  const currentOperation = Promise.race([
-    previousOperation.catch(() => {
-      return null;
-    }),
-    acquireTimeout >= 0 ? new Promise((_, reject) => {
-      setTimeout(() => {
-        console.warn(`@supabase/gotrue-js: Lock "${name}" acquisition timed out after ${acquireTimeout}ms. This may be caused by another operation holding the lock. Consider increasing lockAcquireTimeout or checking for stuck operations.`);
-        reject(new ProcessLockAcquireTimeoutError(`Acquiring process lock with name "${name}" timed out`));
-      }, acquireTimeout);
-    }) : null
-  ].filter((x) => x)).catch((e) => {
-    if (e && e.isAcquireTimeout) {
-      throw e;
-    }
-    return null;
-  }).then(async () => {
-    return await fn();
-  });
-  PROCESS_LOCKS[name] = currentOperation.catch(async (e) => {
-    if (e && e.isAcquireTimeout) {
+  const previousOperationHandled = (async () => {
+    try {
       await previousOperation;
       return null;
+    } catch (e) {
+      return null;
     }
-    throw e;
-  });
+  })();
+  const currentOperation = (async () => {
+    let timeoutId = null;
+    try {
+      const timeoutPromise = acquireTimeout >= 0 ? new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          console.warn(`@supabase/gotrue-js: Lock "${name}" acquisition timed out after ${acquireTimeout}ms. This may be caused by another operation holding the lock. Consider increasing lockAcquireTimeout or checking for stuck operations.`);
+          reject(new ProcessLockAcquireTimeoutError(`Acquiring process lock with name "${name}" timed out`));
+        }, acquireTimeout);
+      }) : null;
+      await Promise.race([previousOperationHandled, timeoutPromise].filter((x) => x));
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
+    } catch (e) {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
+      if (e && e.isAcquireTimeout) {
+        throw e;
+      }
+    }
+    return await fn();
+  })();
+  PROCESS_LOCKS[name] = (async () => {
+    try {
+      return await currentOperation;
+    } catch (e) {
+      if (e && e.isAcquireTimeout) {
+        try {
+          await previousOperation;
+        } catch (prevError) {
+        }
+        return null;
+      }
+      throw e;
+    }
+  })();
   return await currentOperation;
 }
 
@@ -8668,6 +12134,7 @@ var WebAuthnApi = class {
    * @see {@link https://w3c.github.io/webauthn/#sctn-verifying-assertion W3C WebAuthn Spec - Verifying Assertion}
    */
   async _challenge({ factorId, webauthn, friendlyName, signal }, overrides) {
+    var _a;
     try {
       const { data: challengeResponse, error: challengeError } = await this.client.mfa.challenge({
         factorId,
@@ -8680,7 +12147,15 @@ var WebAuthnApi = class {
       if (challengeResponse.webauthn.type === "create") {
         const { user } = challengeResponse.webauthn.credential_options.publicKey;
         if (!user.name) {
-          user.name = `${user.id}:${friendlyName}`;
+          const nameToUse = friendlyName;
+          if (!nameToUse) {
+            const currentUser = await this.client.getUser();
+            const userData = currentUser.data.user;
+            const fallbackName = ((_a = userData === null || userData === void 0 ? void 0 : userData.user_metadata) === null || _a === void 0 ? void 0 : _a.name) || (userData === null || userData === void 0 ? void 0 : userData.email) || (userData === null || userData === void 0 ? void 0 : userData.id) || "User";
+            user.name = `${user.id}:${fallbackName}`;
+          } else {
+            user.name = `${user.id}:${nameToUse}`;
+          }
         }
         if (!user.displayName) {
           user.displayName = user.name;
@@ -8900,8 +12375,9 @@ var DEFAULT_OPTIONS = {
   debug: false,
   hasCustomAuthorizationHeader: false,
   throwOnError: false,
-  lockAcquireTimeout: 1e4
-  // 10 seconds
+  lockAcquireTimeout: 5e3,
+  // 5 seconds
+  skipAutoInitialize: false
 };
 async function lockNoOp(name, acquireTimeout, fn) {
   return await fn();
@@ -9041,10 +12517,18 @@ var GoTrueClient = class _GoTrueClient {
       }
       (_c = this.broadcastChannel) === null || _c === void 0 ? void 0 : _c.addEventListener("message", async (event) => {
         this._debug("received broadcast notification from other tab or client", event);
-        await this._notifyAllSubscribers(event.data.event, event.data.session, false);
+        try {
+          await this._notifyAllSubscribers(event.data.event, event.data.session, false);
+        } catch (error) {
+          this._debug("#broadcastChannel", "error", error);
+        }
       });
     }
-    this.initialize();
+    if (!settings.skipAutoInitialize) {
+      this.initialize().catch((error) => {
+        this._debug("#initialize()", "error", error);
+      });
+    }
   }
   /**
    * Returns whether error throwing mode is enabled for this client.
@@ -9188,6 +12672,173 @@ var GoTrueClient = class _GoTrueClient {
    *
    * @returns A logged-in session if the server has "autoconfirm" ON
    * @returns A user if the server has "autoconfirm" OFF
+   *
+   * @category Auth
+   *
+   * @remarks
+   * - By default, the user needs to verify their email address before logging in. To turn this off, disable **Confirm email** in [your project](/dashboard/project/_/auth/providers).
+   * - **Confirm email** determines if users need to confirm their email address after signing up.
+   *   - If **Confirm email** is enabled, a `user` is returned but `session` is null.
+   *   - If **Confirm email** is disabled, both a `user` and a `session` are returned.
+   * - When the user confirms their email address, they are redirected to the [`SITE_URL`](/docs/guides/auth/redirect-urls#use-wildcards-in-redirect-urls) by default. You can modify your `SITE_URL` or add additional redirect URLs in [your project](/dashboard/project/_/auth/url-configuration).
+   * - If signUp() is called for an existing confirmed user:
+   *   - When both **Confirm email** and **Confirm phone** (even when phone provider is disabled) are enabled in [your project](/dashboard/project/_/auth/providers), an obfuscated/fake user object is returned.
+   *   - When either **Confirm email** or **Confirm phone** (even when phone provider is disabled) is disabled, the error message, `User already registered` is returned.
+   * - To fetch the currently logged-in user, refer to [`getUser()`](/docs/reference/javascript/auth-getuser).
+   *
+   * @example Sign up with an email and password
+   * ```js
+   * const { data, error } = await supabase.auth.signUp({
+   *   email: 'example@email.com',
+   *   password: 'example-password',
+   * })
+   * ```
+   *
+   * @exampleResponse Sign up with an email and password
+   * ```json
+   * // Some fields may be null if "confirm email" is enabled.
+   * {
+   *   "data": {
+   *     "user": {
+   *       "id": "11111111-1111-1111-1111-111111111111",
+   *       "aud": "authenticated",
+   *       "role": "authenticated",
+   *       "email": "example@email.com",
+   *       "email_confirmed_at": "2024-01-01T00:00:00Z",
+   *       "phone": "",
+   *       "last_sign_in_at": "2024-01-01T00:00:00Z",
+   *       "app_metadata": {
+   *         "provider": "email",
+   *         "providers": [
+   *           "email"
+   *         ]
+   *       },
+   *       "user_metadata": {},
+   *       "identities": [
+   *         {
+   *           "identity_id": "22222222-2222-2222-2222-222222222222",
+   *           "id": "11111111-1111-1111-1111-111111111111",
+   *           "user_id": "11111111-1111-1111-1111-111111111111",
+   *           "identity_data": {
+   *             "email": "example@email.com",
+   *             "email_verified": false,
+   *             "phone_verified": false,
+   *             "sub": "11111111-1111-1111-1111-111111111111"
+   *           },
+   *           "provider": "email",
+   *           "last_sign_in_at": "2024-01-01T00:00:00Z",
+   *           "created_at": "2024-01-01T00:00:00Z",
+   *           "updated_at": "2024-01-01T00:00:00Z",
+   *           "email": "example@email.com"
+   *         }
+   *       ],
+   *       "created_at": "2024-01-01T00:00:00Z",
+   *       "updated_at": "2024-01-01T00:00:00Z"
+   *     },
+   *     "session": {
+   *       "access_token": "<ACCESS_TOKEN>",
+   *       "token_type": "bearer",
+   *       "expires_in": 3600,
+   *       "expires_at": 1700000000,
+   *       "refresh_token": "<REFRESH_TOKEN>",
+   *       "user": {
+   *         "id": "11111111-1111-1111-1111-111111111111",
+   *         "aud": "authenticated",
+   *         "role": "authenticated",
+   *         "email": "example@email.com",
+   *         "email_confirmed_at": "2024-01-01T00:00:00Z",
+   *         "phone": "",
+   *         "last_sign_in_at": "2024-01-01T00:00:00Z",
+   *         "app_metadata": {
+   *           "provider": "email",
+   *           "providers": [
+   *             "email"
+   *           ]
+   *         },
+   *         "user_metadata": {},
+   *         "identities": [
+   *           {
+   *             "identity_id": "22222222-2222-2222-2222-222222222222",
+   *             "id": "11111111-1111-1111-1111-111111111111",
+   *             "user_id": "11111111-1111-1111-1111-111111111111",
+   *             "identity_data": {
+   *               "email": "example@email.com",
+   *               "email_verified": false,
+   *               "phone_verified": false,
+   *               "sub": "11111111-1111-1111-1111-111111111111"
+   *             },
+   *             "provider": "email",
+   *             "last_sign_in_at": "2024-01-01T00:00:00Z",
+   *             "created_at": "2024-01-01T00:00:00Z",
+   *             "updated_at": "2024-01-01T00:00:00Z",
+   *             "email": "example@email.com"
+   *           }
+   *         ],
+   *         "created_at": "2024-01-01T00:00:00Z",
+   *         "updated_at": "2024-01-01T00:00:00Z"
+   *       }
+   *     }
+   *   },
+   *   "error": null
+   * }
+   * ```
+   *
+   * @example Sign up with a phone number and password (SMS)
+   * ```js
+   * const { data, error } = await supabase.auth.signUp({
+   *   phone: '123456789',
+   *   password: 'example-password',
+   *   options: {
+   *     channel: 'sms'
+   *   }
+   * })
+   * ```
+   *
+   * @exampleDescription Sign up with a phone number and password (whatsapp)
+   * The user will be sent a WhatsApp message which contains a OTP. By default, a given user can only request a OTP once every 60 seconds. Note that a user will need to have a valid WhatsApp account that is linked to Twilio in order to use this feature.
+   *
+   * @example Sign up with a phone number and password (whatsapp)
+   * ```js
+   * const { data, error } = await supabase.auth.signUp({
+   *   phone: '123456789',
+   *   password: 'example-password',
+   *   options: {
+   *     channel: 'whatsapp'
+   *   }
+   * })
+   * ```
+   *
+   * @example Sign up with additional user metadata
+   * ```js
+   * const { data, error } = await supabase.auth.signUp(
+   *   {
+   *     email: 'example@email.com',
+   *     password: 'example-password',
+   *     options: {
+   *       data: {
+   *         first_name: 'John',
+   *         age: 27,
+   *       }
+   *     }
+   *   }
+   * )
+   * ```
+   *
+   * @exampleDescription Sign up with a redirect URL
+   * - See [redirect URLs and wildcards](/docs/guides/auth/redirect-urls#use-wildcards-in-redirect-urls) to add additional redirect URLs to your project.
+   *
+   * @example Sign up with a redirect URL
+   * ```js
+   * const { data, error } = await supabase.auth.signUp(
+   *   {
+   *     email: 'example@email.com',
+   *     password: 'example-password',
+   *     options: {
+   *       emailRedirectTo: 'https://example.com/welcome'
+   *     }
+   *   }
+   * )
+   * ```
    */
   async signUp(credentials) {
     var _a, _b, _c;
@@ -9567,9 +13218,7 @@ var GoTrueClient = class _GoTrueClient {
       }
       if (data.session) {
         await this._saveSession(data.session);
-        setTimeout(async () => {
-          await this._notifyAllSubscribers("SIGNED_IN", data.session);
-        }, 0);
+        await this._notifyAllSubscribers("SIGNED_IN", data.session);
       }
       return this._returnResult({ data: Object.assign(Object.assign({}, data), { redirectType: redirectType !== null && redirectType !== void 0 ? redirectType : null }), error });
     } catch (error) {
@@ -10116,7 +13765,7 @@ var GoTrueClient = class _GoTrueClient {
       } else {
         const { data, error } = await this._getUser(currentSession.access_token);
         if (error) {
-          throw error;
+          return this._returnResult({ data: { user: null, session: null }, error });
         }
         session = {
           access_token: currentSession.access_token,
@@ -10298,14 +13947,14 @@ var GoTrueClient = class _GoTrueClient {
     return await this._useSession(async (result) => {
       var _a;
       const { data, error: sessionError } = result;
-      if (sessionError) {
+      if (sessionError && !isAuthSessionMissingError(sessionError)) {
         return this._returnResult({ error: sessionError });
       }
       const accessToken = (_a = data.session) === null || _a === void 0 ? void 0 : _a.access_token;
       if (accessToken) {
         const { error } = await this.admin.signOut(accessToken, scope);
         if (error) {
-          if (!(isAuthApiError(error) && (error.status === 404 || error.status === 401 || error.status === 403))) {
+          if (!(isAuthApiError(error) && (error.status === 404 || error.status === 401 || error.status === 403) || isAuthSessionMissingError(error))) {
             return this._returnResult({ error });
           }
         }
@@ -10892,7 +14541,13 @@ var GoTrueClient = class _GoTrueClient {
       return false;
     }
     try {
-      this.visibilityChangedCallback = async () => await this._onVisibilityChanged(false);
+      this.visibilityChangedCallback = async () => {
+        try {
+          await this._onVisibilityChanged(false);
+        } catch (error) {
+          this._debug("#visibilityChangedCallback", "error", error);
+        }
+      };
       window === null || window === void 0 ? void 0 : window.addEventListener("visibilitychange", this.visibilityChangedCallback);
       await this._onVisibilityChanged(true);
     } catch (error) {
@@ -11125,8 +14780,33 @@ var GoTrueClient = class _GoTrueClient {
   /**
    * {@see GoTrueMFAApi#getAuthenticatorAssuranceLevel}
    */
-  async _getAuthenticatorAssuranceLevel() {
-    var _a, _b;
+  async _getAuthenticatorAssuranceLevel(jwt) {
+    var _a, _b, _c, _d;
+    if (jwt) {
+      try {
+        const { payload: payload2 } = decodeJWT(jwt);
+        let currentLevel2 = null;
+        if (payload2.aal) {
+          currentLevel2 = payload2.aal;
+        }
+        let nextLevel2 = currentLevel2;
+        const { data: { user }, error: userError } = await this.getUser(jwt);
+        if (userError) {
+          return this._returnResult({ data: null, error: userError });
+        }
+        const verifiedFactors2 = (_b = (_a = user === null || user === void 0 ? void 0 : user.factors) === null || _a === void 0 ? void 0 : _a.filter((factor) => factor.status === "verified")) !== null && _b !== void 0 ? _b : [];
+        if (verifiedFactors2.length > 0) {
+          nextLevel2 = "aal2";
+        }
+        const currentAuthenticationMethods2 = payload2.amr || [];
+        return { data: { currentLevel: currentLevel2, nextLevel: nextLevel2, currentAuthenticationMethods: currentAuthenticationMethods2 }, error: null };
+      } catch (error) {
+        if (isAuthError(error)) {
+          return this._returnResult({ data: null, error });
+        }
+        throw error;
+      }
+    }
     const { data: { session }, error: sessionError } = await this.getSession();
     if (sessionError) {
       return this._returnResult({ data: null, error: sessionError });
@@ -11143,7 +14823,7 @@ var GoTrueClient = class _GoTrueClient {
       currentLevel = payload.aal;
     }
     let nextLevel = currentLevel;
-    const verifiedFactors = (_b = (_a = session.user.factors) === null || _a === void 0 ? void 0 : _a.filter((factor) => factor.status === "verified")) !== null && _b !== void 0 ? _b : [];
+    const verifiedFactors = (_d = (_c = session.user.factors) === null || _c === void 0 ? void 0 : _c.filter((factor) => factor.status === "verified")) !== null && _d !== void 0 ? _d : [];
     if (verifiedFactors.length > 0) {
       nextLevel = "aal2";
     }
@@ -11155,7 +14835,7 @@ var GoTrueClient = class _GoTrueClient {
    * Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
    *
    * Returns authorization details including client info, scopes, and user information.
-   * If the API returns a redirect_uri, it means consent was already given - the caller
+   * If the response includes only a redirect_url field, it means consent was already given - the caller
    * should handle the redirect manually if needed.
    */
   async _getAuthorizationDetails(authorizationId) {
@@ -11413,7 +15093,7 @@ var AuthClient = GoTrueClient_default;
 var AuthClient_default = AuthClient;
 
 // node_modules/@supabase/supabase-js/dist/index.mjs
-var version4 = "2.91.0";
+var version4 = "2.99.3";
 var JS_ENV = "";
 if (typeof Deno !== "undefined") JS_ENV = "deno";
 else if (typeof document !== "undefined") JS_ENV = "web";
@@ -11429,37 +15109,37 @@ var DEFAULT_AUTH_OPTIONS = {
   flowType: "implicit"
 };
 var DEFAULT_REALTIME_OPTIONS = {};
-function _typeof2(o) {
+function _typeof3(o) {
   "@babel/helpers - typeof";
-  return _typeof2 = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(o$1) {
+  return _typeof3 = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(o$1) {
     return typeof o$1;
   } : function(o$1) {
     return o$1 && "function" == typeof Symbol && o$1.constructor === Symbol && o$1 !== Symbol.prototype ? "symbol" : typeof o$1;
-  }, _typeof2(o);
+  }, _typeof3(o);
 }
-function toPrimitive2(t, r) {
-  if ("object" != _typeof2(t) || !t) return t;
+function toPrimitive3(t, r) {
+  if ("object" != _typeof3(t) || !t) return t;
   var e = t[Symbol.toPrimitive];
   if (void 0 !== e) {
     var i = e.call(t, r || "default");
-    if ("object" != _typeof2(i)) return i;
+    if ("object" != _typeof3(i)) return i;
     throw new TypeError("@@toPrimitive must return a primitive value.");
   }
   return ("string" === r ? String : Number)(t);
 }
-function toPropertyKey2(t) {
-  var i = toPrimitive2(t, "string");
-  return "symbol" == _typeof2(i) ? i : i + "";
+function toPropertyKey3(t) {
+  var i = toPrimitive3(t, "string");
+  return "symbol" == _typeof3(i) ? i : i + "";
 }
-function _defineProperty2(e, r, t) {
-  return (r = toPropertyKey2(r)) in e ? Object.defineProperty(e, r, {
+function _defineProperty3(e, r, t) {
+  return (r = toPropertyKey3(r)) in e ? Object.defineProperty(e, r, {
     value: t,
     enumerable: true,
     configurable: true,
     writable: true
   }) : e[r] = t, e;
 }
-function ownKeys2(e, r) {
+function ownKeys3(e, r) {
   var t = Object.keys(e);
   if (Object.getOwnPropertySymbols) {
     var o = Object.getOwnPropertySymbols(e);
@@ -11469,12 +15149,12 @@ function ownKeys2(e, r) {
   }
   return t;
 }
-function _objectSpread22(e) {
+function _objectSpread23(e) {
   for (var r = 1; r < arguments.length; r++) {
     var t = null != arguments[r] ? arguments[r] : {};
-    r % 2 ? ownKeys2(Object(t), true).forEach(function(r$1) {
-      _defineProperty2(e, r$1, t[r$1]);
-    }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys2(Object(t)).forEach(function(r$1) {
+    r % 2 ? ownKeys3(Object(t), true).forEach(function(r$1) {
+      _defineProperty3(e, r$1, t[r$1]);
+    }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys3(Object(t)).forEach(function(r$1) {
       Object.defineProperty(e, r$1, Object.getOwnPropertyDescriptor(t, r$1));
     });
   }
@@ -11496,7 +15176,7 @@ var fetchWithAuth = (supabaseKey, getAccessToken, customFetch) => {
     let headers = new HeadersConstructor(init === null || init === void 0 ? void 0 : init.headers);
     if (!headers.has("apikey")) headers.set("apikey", supabaseKey);
     if (!headers.has("Authorization")) headers.set("Authorization", `Bearer ${accessToken}`);
-    return fetch$1(input, _objectSpread22(_objectSpread22({}, init), {}, { headers }));
+    return fetch$1(input, _objectSpread23(_objectSpread23({}, init), {}, { headers }));
   };
 };
 function ensureTrailingSlash(url) {
@@ -11507,11 +15187,11 @@ function applySettingDefaults(options, defaults) {
   const { db: dbOptions, auth: authOptions, realtime: realtimeOptions, global: globalOptions } = options;
   const { db: DEFAULT_DB_OPTIONS$1, auth: DEFAULT_AUTH_OPTIONS$1, realtime: DEFAULT_REALTIME_OPTIONS$1, global: DEFAULT_GLOBAL_OPTIONS$1 } = defaults;
   const result = {
-    db: _objectSpread22(_objectSpread22({}, DEFAULT_DB_OPTIONS$1), dbOptions),
-    auth: _objectSpread22(_objectSpread22({}, DEFAULT_AUTH_OPTIONS$1), authOptions),
-    realtime: _objectSpread22(_objectSpread22({}, DEFAULT_REALTIME_OPTIONS$1), realtimeOptions),
+    db: _objectSpread23(_objectSpread23({}, DEFAULT_DB_OPTIONS$1), dbOptions),
+    auth: _objectSpread23(_objectSpread23({}, DEFAULT_AUTH_OPTIONS$1), authOptions),
+    realtime: _objectSpread23(_objectSpread23({}, DEFAULT_REALTIME_OPTIONS$1), realtimeOptions),
     storage: {},
-    global: _objectSpread22(_objectSpread22(_objectSpread22({}, DEFAULT_GLOBAL_OPTIONS$1), globalOptions), {}, { headers: _objectSpread22(_objectSpread22({}, (_DEFAULT_GLOBAL_OPTIO = DEFAULT_GLOBAL_OPTIONS$1 === null || DEFAULT_GLOBAL_OPTIONS$1 === void 0 ? void 0 : DEFAULT_GLOBAL_OPTIONS$1.headers) !== null && _DEFAULT_GLOBAL_OPTIO !== void 0 ? _DEFAULT_GLOBAL_OPTIO : {}), (_globalOptions$header = globalOptions === null || globalOptions === void 0 ? void 0 : globalOptions.headers) !== null && _globalOptions$header !== void 0 ? _globalOptions$header : {}) }),
+    global: _objectSpread23(_objectSpread23(_objectSpread23({}, DEFAULT_GLOBAL_OPTIONS$1), globalOptions), {}, { headers: _objectSpread23(_objectSpread23({}, (_DEFAULT_GLOBAL_OPTIO = DEFAULT_GLOBAL_OPTIONS$1 === null || DEFAULT_GLOBAL_OPTIONS$1 === void 0 ? void 0 : DEFAULT_GLOBAL_OPTIONS$1.headers) !== null && _DEFAULT_GLOBAL_OPTIO !== void 0 ? _DEFAULT_GLOBAL_OPTIO : {}), (_globalOptions$header = globalOptions === null || globalOptions === void 0 ? void 0 : globalOptions.headers) !== null && _globalOptions$header !== void 0 ? _globalOptions$header : {}) }),
     accessToken: async () => ""
   };
   if (options.accessToken) result.accessToken = options.accessToken;
@@ -11536,6 +15216,9 @@ var SupabaseAuthClient = class extends AuthClient_default {
 var SupabaseClient = class {
   /**
   * Create a new client for use in the browser.
+  *
+  * @category Initializing
+  *
   * @param supabaseUrl The unique Supabase URL which is supplied when you create a new project in your project dashboard.
   * @param supabaseKey The unique Supabase Key which is supplied when you create a new project in your project dashboard.
   * @param options.db.schema You can switch in between schemas. The schema needs to be on the list of exposed schemas inside Supabase.
@@ -11546,11 +15229,175 @@ var SupabaseClient = class {
   * @param options.storage Options passed along to the storage-js constructor.
   * @param options.global.fetch A custom fetch implementation.
   * @param options.global.headers Any additional headers to send with each network request.
-  * @example
+  *
+  * @example Creating a client
+  * ```js
+  * import { createClient } from '@supabase/supabase-js'
+  *
+  * // Create a single supabase client for interacting with your database
+  * const supabase = createClient('https://xyzcompany.supabase.co', 'publishable-or-anon-key')
+  * ```
+  *
+  * @example With a custom domain
+  * ```js
+  * import { createClient } from '@supabase/supabase-js'
+  *
+  * // Use a custom domain as the supabase URL
+  * const supabase = createClient('https://my-custom-domain.com', 'publishable-or-anon-key')
+  * ```
+  *
+  * @example With additional parameters
+  * ```js
+  * import { createClient } from '@supabase/supabase-js'
+  *
+  * const options = {
+  *   db: {
+  *     schema: 'public',
+  *   },
+  *   auth: {
+  *     autoRefreshToken: true,
+  *     persistSession: true,
+  *     detectSessionInUrl: true
+  *   },
+  *   global: {
+  *     headers: { 'x-my-custom-header': 'my-app-name' },
+  *   },
+  * }
+  * const supabase = createClient("https://xyzcompany.supabase.co", "publishable-or-anon-key", options)
+  * ```
+  *
+  * @exampleDescription With custom schemas
+  * By default the API server points to the `public` schema. You can enable other database schemas within the Dashboard.
+  * Go to [Settings > API > Exposed schemas](/dashboard/project/_/settings/api) and add the schema which you want to expose to the API.
+  *
+  * Note: each client connection can only access a single schema, so the code above can access the `other_schema` schema but cannot access the `public` schema.
+  *
+  * @example With custom schemas
+  * ```js
+  * import { createClient } from '@supabase/supabase-js'
+  *
+  * const supabase = createClient('https://xyzcompany.supabase.co', 'publishable-or-anon-key', {
+  *   // Provide a custom schema. Defaults to "public".
+  *   db: { schema: 'other_schema' }
+  * })
+  * ```
+  *
+  * @exampleDescription Custom fetch implementation
+  * `supabase-js` uses the [`cross-fetch`](https://www.npmjs.com/package/cross-fetch) library to make HTTP requests,
+  * but an alternative `fetch` implementation can be provided as an option.
+  * This is most useful in environments where `cross-fetch` is not compatible (for instance Cloudflare Workers).
+  *
+  * @example Custom fetch implementation
+  * ```js
+  * import { createClient } from '@supabase/supabase-js'
+  *
+  * const supabase = createClient('https://xyzcompany.supabase.co', 'publishable-or-anon-key', {
+  *   global: { fetch: fetch.bind(globalThis) }
+  * })
+  * ```
+  *
+  * @exampleDescription React Native options with AsyncStorage
+  * For React Native we recommend using `AsyncStorage` as the storage implementation for Supabase Auth.
+  *
+  * @example React Native options with AsyncStorage
+  * ```js
+  * import 'react-native-url-polyfill/auto'
+  * import { createClient } from '@supabase/supabase-js'
+  * import AsyncStorage from "@react-native-async-storage/async-storage";
+  *
+  * const supabase = createClient("https://xyzcompany.supabase.co", "publishable-or-anon-key", {
+  *   auth: {
+  *     storage: AsyncStorage,
+  *     autoRefreshToken: true,
+  *     persistSession: true,
+  *     detectSessionInUrl: false,
+  *   },
+  * });
+  * ```
+  *
+  * @exampleDescription React Native options with Expo SecureStore
+  * If you wish to encrypt the user's session information, you can use `aes-js` and store the encryption key in Expo SecureStore.
+  * The `aes-js` library, a reputable JavaScript-only implementation of the AES encryption algorithm in CTR mode.
+  * A new 256-bit encryption key is generated using the `react-native-get-random-values` library.
+  * This key is stored inside Expo's SecureStore, while the value is encrypted and placed inside AsyncStorage.
+  *
+  * Please make sure that:
+  * - You keep the `expo-secure-store`, `aes-js` and `react-native-get-random-values` libraries up-to-date.
+  * - Choose the correct [`SecureStoreOptions`](https://docs.expo.dev/versions/latest/sdk/securestore/#securestoreoptions) for your app's needs.
+  *   E.g. [`SecureStore.WHEN_UNLOCKED`](https://docs.expo.dev/versions/latest/sdk/securestore/#securestorewhen_unlocked) regulates when the data can be accessed.
+  * - Carefully consider optimizations or other modifications to the above example, as those can lead to introducing subtle security vulnerabilities.
+  *
+  * @example React Native options with Expo SecureStore
+  * ```ts
+  * import 'react-native-url-polyfill/auto'
+  * import { createClient } from '@supabase/supabase-js'
+  * import AsyncStorage from '@react-native-async-storage/async-storage';
+  * import * as SecureStore from 'expo-secure-store';
+  * import * as aesjs from 'aes-js';
+  * import 'react-native-get-random-values';
+  *
+  * // As Expo's SecureStore does not support values larger than 2048
+  * // bytes, an AES-256 key is generated and stored in SecureStore, while
+  * // it is used to encrypt/decrypt values stored in AsyncStorage.
+  * class LargeSecureStore {
+  *   private async _encrypt(key: string, value: string) {
+  *     const encryptionKey = crypto.getRandomValues(new Uint8Array(256 / 8));
+  *
+  *     const cipher = new aesjs.ModeOfOperation.ctr(encryptionKey, new aesjs.Counter(1));
+  *     const encryptedBytes = cipher.encrypt(aesjs.utils.utf8.toBytes(value));
+  *
+  *     await SecureStore.setItemAsync(key, aesjs.utils.hex.fromBytes(encryptionKey));
+  *
+  *     return aesjs.utils.hex.fromBytes(encryptedBytes);
+  *   }
+  *
+  *   private async _decrypt(key: string, value: string) {
+  *     const encryptionKeyHex = await SecureStore.getItemAsync(key);
+  *     if (!encryptionKeyHex) {
+  *       return encryptionKeyHex;
+  *     }
+  *
+  *     const cipher = new aesjs.ModeOfOperation.ctr(aesjs.utils.hex.toBytes(encryptionKeyHex), new aesjs.Counter(1));
+  *     const decryptedBytes = cipher.decrypt(aesjs.utils.hex.toBytes(value));
+  *
+  *     return aesjs.utils.utf8.fromBytes(decryptedBytes);
+  *   }
+  *
+  *   async getItem(key: string) {
+  *     const encrypted = await AsyncStorage.getItem(key);
+  *     if (!encrypted) { return encrypted; }
+  *
+  *     return await this._decrypt(key, encrypted);
+  *   }
+  *
+  *   async removeItem(key: string) {
+  *     await AsyncStorage.removeItem(key);
+  *     await SecureStore.deleteItemAsync(key);
+  *   }
+  *
+  *   async setItem(key: string, value: string) {
+  *     const encrypted = await this._encrypt(key, value);
+  *
+  *     await AsyncStorage.setItem(key, encrypted);
+  *   }
+  * }
+  *
+  * const supabase = createClient("https://xyzcompany.supabase.co", "publishable-or-anon-key", {
+  *   auth: {
+  *     storage: new LargeSecureStore(),
+  *     autoRefreshToken: true,
+  *     persistSession: true,
+  *     detectSessionInUrl: false,
+  *   },
+  * });
+  * ```
+  *
+  * @example With a database query
   * ```ts
   * import { createClient } from '@supabase/supabase-js'
   *
   * const supabase = createClient('https://xyzcompany.supabase.co', 'public-anon-key')
+  *
   * const { data } = await supabase.from('profiles').select('*')
   * ```
   */
@@ -11569,7 +15416,7 @@ var SupabaseClient = class {
     const DEFAULTS = {
       db: DEFAULT_DB_OPTIONS,
       realtime: DEFAULT_REALTIME_OPTIONS,
-      auth: _objectSpread22(_objectSpread22({}, DEFAULT_AUTH_OPTIONS), {}, { storageKey: defaultStorageKey }),
+      auth: _objectSpread23(_objectSpread23({}, DEFAULT_AUTH_OPTIONS), {}, { storageKey: defaultStorageKey }),
       global: DEFAULT_GLOBAL_OPTIONS
     };
     const settings = applySettingDefaults(options !== null && options !== void 0 ? options : {}, DEFAULTS);
@@ -11585,7 +15432,7 @@ var SupabaseClient = class {
       } });
     }
     this.fetch = fetchWithAuth(supabaseKey, this._getAccessToken.bind(this), settings.global.fetch);
-    this.realtime = this._initRealtimeClient(_objectSpread22({
+    this.realtime = this._initRealtimeClient(_objectSpread23({
       headers: this.headers,
       accessToken: this._getAccessToken.bind(this)
     }, settings.realtime));
@@ -11593,7 +15440,9 @@ var SupabaseClient = class {
     this.rest = new PostgrestClient(new URL("rest/v1", baseUrl).href, {
       headers: this.headers,
       schema: settings.db.schema,
-      fetch: this.fetch
+      fetch: this.fetch,
+      timeout: settings.db.timeout,
+      urlLengthLimit: settings.db.urlLengthLimit
     });
     this.storage = new StorageClient(this.storageUrl.href, this.headers, this.fetch, options === null || options === void 0 ? void 0 : options.storage);
     if (!settings.accessToken) this._listenForAuthEvents();
@@ -11700,7 +15549,7 @@ var SupabaseClient = class {
     };
     return new SupabaseAuthClient({
       url: this.authUrl.href,
-      headers: _objectSpread22(_objectSpread22({}, authHeaders), headers),
+      headers: _objectSpread23(_objectSpread23({}, authHeaders), headers),
       storageKey,
       autoRefreshToken,
       persistSession,
@@ -11716,7 +15565,7 @@ var SupabaseClient = class {
     });
   }
   _initRealtimeClient(options) {
-    return new RealtimeClient(this.realtimeUrl.href, _objectSpread22(_objectSpread22({}, options), {}, { params: _objectSpread22(_objectSpread22({}, { apikey: this.supabaseKey }), options === null || options === void 0 ? void 0 : options.params) }));
+    return new RealtimeClient(this.realtimeUrl.href, _objectSpread23(_objectSpread23({}, options), {}, { params: _objectSpread23(_objectSpread23({}, { apikey: this.supabaseKey }), options === null || options === void 0 ? void 0 : options.params) }));
   }
   _listenForAuthEvents() {
     return this.auth.onAuthStateChange((event, session) => {

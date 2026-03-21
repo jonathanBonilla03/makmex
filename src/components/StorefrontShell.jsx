@@ -136,9 +136,12 @@ function CartSidebar({ isOpen, onClose }) {
                 {t('clearCart')}
               </button>
             </div>
-            <button className="w-full bg-makmex-orange text-black font-semibold py-3 rounded-lg hover:bg-makmex-ember">
+            <Link 
+              to="/checkout"
+              className="w-full bg-makmex-orange text-black font-semibold py-3 rounded-lg hover:bg-makmex-ember text-center block"
+            >
               {t('checkout')}
-            </button>
+            </Link>
           </div>
         )}
       </div>
