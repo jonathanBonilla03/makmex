@@ -12,8 +12,6 @@ export default function CheckoutPage() {
     name: '',
     email: '',
     phone_number: '',
-    address: '',
-    city: '',
     state: '',
     zip_code: ''
   });
@@ -23,7 +21,7 @@ export default function CheckoutPage() {
     setIsSubmitting(true);
 
     // Validate required fields
-    if (!formData.name || !formData.email || !formData.address || !formData.city || !country || !formData.zip_code) {
+    if (!formData.name || !formData.email || !country || !formData.zip_code) {
       alert('Please fill in all required fields');
       setIsSubmitting(false);
       return;
@@ -130,28 +128,6 @@ export default function CheckoutPage() {
                 placeholder="(555) 123-4567"
                 value={formData.phone_number}
                 onChange={(e) => setFormData({...formData, phone_number: e.target.value})}
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-2 text-makmex-text">Address</label>
-              <input 
-                type="text" 
-                className="w-full p-3 border border-makmex-border rounded-lg bg-makmex-surface text-makmex-text focus:outline-none focus:border-makmex-orange"
-                placeholder="123 Main St"
-                value={formData.address}
-                onChange={(e) => setFormData({...formData, address: e.target.value})}
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-2 text-makmex-text">City</label>
-              <input 
-                type="text" 
-                className="w-full p-3 border border-makmex-border rounded-lg bg-makmex-surface text-makmex-text focus:outline-none focus:border-makmex-orange"
-                placeholder="New York"
-                value={formData.city}
-                onChange={(e) => setFormData({...formData, city: e.target.value})}
               />
             </div>
             
