@@ -689,6 +689,40 @@ export async function getKits() {
 }
 
 /**
+ * Check if a customer already exists by email or phone number
+ * @param {string} email - Customer email
+ * @param {string} phoneNumber - Customer phone number (optional)
+ * @returns {Promise<{success: boolean, data?: any, error?: string}>}
+ */
+export async function checkExistingCustomer(email, phoneNumber = null) {
+  try {
+    let query = supabase
+      .from('customers')
+      .select('*');
+
+    // Build OR condition for email or phone number match
+    const conditions = [`email.eq.${email}`];
+    if (phoneNumber) {
+      conditions.push(`phone_number.eq.${phoneNumber}`);
+    }
+    
+    query = query.or(conditions.join(','));
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error checking existing customer:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data };
+  } catch (err) {
+    console.error('Unexpected error checking customer:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
  * Add a new customer to the database
  * @param {Object} customerData - Customer information
  * @returns {Promise<{success: boolean, data?: any, error?: string}>}
