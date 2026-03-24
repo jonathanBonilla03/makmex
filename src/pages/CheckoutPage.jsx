@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useLanguage } from "../context/LanguageContext";
 import { useCart } from "../context/CartContext";
-import { addCustomer } from "../lib/supabase";
+import { addCustomer, checkExistingCustomer } from "../lib/supabase";
 
 export default function CheckoutPage() {
   const { t } = useLanguage();
@@ -43,10 +43,28 @@ export default function CheckoutPage() {
     };
 
     try {
+      // Check if customer already exists
+      const existingCustomerResult = await checkExistingCustomer(formData.email, formData.phone_number);
+      
+      if (!existingCustomerResult.success) {
+        alert(`Error checking customer: ${existingCustomerResult.error}`);
+        return;
+      }
+
+      // If customer exists, use their existing record
+      if (existingCustomerResult.data && existingCustomerResult.data.length > 0) {
+        const existingCustomer = existingCustomerResult.data[0];
+        alert(`Welcome back, ${existingCustomer.name}! We found your existing account.`);
+        // You could update their information here if needed
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Create new customer if they don't exist
       const result = await addCustomer(customerData);
       
       if (result.success) {
-        alert(`Order placed successfully! Customer ID: ${result.data.id}`);
+        alert(`Order placed successfully! Thank you for your purchase.`);
         // You could also clear the cart here if needed
         // clearCart();
         // Navigate to a success page
@@ -267,6 +285,15 @@ export default function CheckoutPage() {
               {isSubmitting ? 'Placing Order...' : 'Place Order'}
             </button>
           </form>
+          
+          <div className="mt-6 p-4 bg-makmex-surface border border-makmex-border rounded-lg">
+            <p className="text-sm text-makmex-muted">
+              <strong>Questions or Issues?</strong> Contact us at 
+              <a href="mailto:test@gmail.com" className="text-makmex-orange hover:underline ml-1">
+                test@gmail.com
+              </a>
+            </p>
+          </div>
         </div>
       </div>
     </div>
