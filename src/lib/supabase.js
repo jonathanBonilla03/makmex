@@ -689,6 +689,199 @@ export async function getKits() {
 }
 
 /**
+ * Check if customer has recent orders (to prevent spam)
+ * @param {string} customerId - Customer UUID
+ * @returns {Promise<{success: boolean, hasRecentOrder: boolean, error?: string}>}
+ */
+export async function checkRecentOrders(customerId) {
+  try {
+    // Check for orders in the last 24 hours
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    
+    const { data, error } = await supabase
+      .from('orders')
+      .select('id, created_at')
+      .eq('customer_id', customerId)
+      .gte('created_at', twentyFourHoursAgo)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (error) {
+      console.error('Error checking recent orders:', error);
+      return { success: false, error: error.message, hasRecentOrder: false };
+    }
+
+    const hasRecentOrder = data && data.length > 0;
+    
+    return { 
+      success: true, 
+      hasRecentOrder,
+      recentOrderTime: hasRecentOrder ? data[0].created_at : null
+    };
+  } catch (err) {
+    console.error('Unexpected error checking recent orders:', err);
+    return { success: false, error: err.message, hasRecentOrder: false };
+  }
+}
+
+/**
+ * Check for duplicate order (same customer, same items, same total within last hour)
+ * @param {string} customerId - Customer UUID
+ * @param {Array} cartItems - Items in cart
+ * @param {number} total - Order total
+ * @returns {Promise<{success: boolean, isDuplicate: boolean, error?: string}>}
+ */
+export async function checkDuplicateOrder(customerId, cartItems, total) {
+  try {
+    // Check for orders in the last hour with same total
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    
+    const { data, error } = await supabase
+      .from('orders')
+      .select('id, created_at, total')
+      .eq('customer_id', customerId)
+      .eq('total', total)
+      .gte('created_at', oneHourAgo)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (error) {
+      console.error('Error checking duplicate orders:', error);
+      return { success: false, error: error.message, isDuplicate: false };
+    }
+
+    // If we found an order with same total in last hour, check items
+    if (data && data.length > 0) {
+      const recentOrder = data[0];
+      
+      // Get the items from the recent order
+      const { data: orderItems, error: itemsError } = await supabase
+        .from('order_products')
+        .select('product_id, quantity, unit_price')
+        .eq('order_id', recentOrder.id);
+
+      if (!itemsError && orderItems) {
+        // Compare cart items with order items
+        const currentItems = cartItems
+          .filter(item => item.type === 'product')
+          .map(item => ({
+            product_id: item.id,
+            quantity: item.quantity,
+            unit_price: item.price
+          }));
+
+        // Simple comparison - check if same number of items and same quantities
+        if (currentItems.length === orderItems.length) {
+          const itemsMatch = currentItems.every(currentItem => {
+            const matchingOrderItem = orderItems.find(orderItem => 
+              orderItem.product_id === currentItem.product_id &&
+              orderItem.quantity === currentItem.quantity &&
+              orderItem.unit_price === currentItem.unit_price
+            );
+            return matchingOrderItem !== undefined;
+          });
+
+          if (itemsMatch) {
+            return { success: true, isDuplicate: true, recentOrderTime: recentOrder.created_at };
+          }
+        }
+      }
+    }
+
+    return { success: true, isDuplicate: false };
+  } catch (err) {
+    console.error('Unexpected error checking duplicate orders:', err);
+    return { success: false, error: err.message, isDuplicate: false };
+  }
+}
+
+/**
+ * Create a new order with associated items
+ * @param {Object} orderData - Order information
+ * @param {Array} cartItems - Items in the cart
+ * @returns {Promise<{success: boolean, data?: any, error?: string}>}
+ */
+export async function createOrder(orderData, cartItems) {
+  try {
+    // Start a transaction by creating the order first
+    const orderInsertData = {
+      customer_id: orderData.customer_id, // Back to customer_id since it's now UUID
+      status: orderData.status || 'pending',
+      subtotal: orderData.subtotal,
+      total: orderData.total,
+      tax: orderData.tax || 0
+    };
+
+    console.log('Order insert data:', orderInsertData);
+
+    const { data: order, error: orderError } = await supabase
+      .from('orders')
+      .insert([orderInsertData])
+      .select()
+      .single();
+
+    if (orderError) {
+      console.error('Error creating order:', orderError);
+      return { success: false, error: orderError.message };
+    }
+
+    // Separate items by type and prepare for insertion
+    const insertPromises = [];
+
+    console.log('Processing cart items:', cartItems);
+
+    cartItems.forEach(item => {
+      console.log('Item:', item);
+      console.log('Item ID:', item.id, 'Type:', typeof item.id);
+      
+      const orderItem = {
+        order_id: order.id,
+        quantity: item.quantity,
+        unit_price: item.price
+      };
+
+      if (item.type === 'product') {
+        insertPromises.push(
+          supabase.from('order_products').insert({
+            ...orderItem,
+            product_id: item.id
+          })
+        );
+      } else if (item.type === 'kit') {
+        insertPromises.push(
+          supabase.from('order_kits').insert({
+            ...orderItem,
+            kit_id: item.id
+          })
+        );
+      } else if (item.type === 'combo') {
+        insertPromises.push(
+          supabase.from('order_combos').insert({
+            ...orderItem,
+            combo_id: item.id
+          })
+        );
+      }
+    });
+
+    // Execute all insertions
+    const results = await Promise.all(insertPromises);
+    
+    // Check for errors in any of the insertions
+    const hasErrors = results.some(result => result.error);
+    if (hasErrors) {
+      console.error('Error inserting order items:', results);
+      return { success: false, error: 'Failed to insert order items' };
+    }
+
+    return { success: true, data: order };
+  } catch (err) {
+    console.error('Unexpected error creating order:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
  * Check if a customer already exists by email or phone number
  * @param {string} email - Customer email
  * @param {string} phoneNumber - Customer phone number (optional)
@@ -734,12 +927,7 @@ export async function addCustomer(customerData) {
       .insert([{
         name: customerData.name,
         email: customerData.email,
-        phone_number: customerData.phone_number || null,
-        address: customerData.address,
-        city: customerData.city,
-        state: customerData.state || null,
-        country: customerData.country,
-        zip_code: customerData.zip_code
+        phone_number: customerData.phone_number || null
       }])
       .select()
       .single();
