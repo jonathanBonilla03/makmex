@@ -7,44 +7,55 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 /**
- * Get signed URLs for product images
+ * Get public URLs for product images
  * @param {Array} productImages - Array of product images with path and bucket
- * @returns {Promise<Array>} Array of images with signed URLs
+ * @returns {Promise<Array>} Array of images with public URLs
  */
 async function getProductImageUrls(productImages) {
   if (!productImages || productImages.length === 0) {
     return []
   }
 
-  const imagesWithUrls = await Promise.all(
-    productImages.map(async (image) => {
-      try {
-        const { data: signedUrl, error } = await supabase.storage
-          .from(image.bucket || 'product-images')
-          .createSignedUrl(image.path, 3600) // 1 hour expiry
+  const buildPublicUrl = (bucket, path, transform) => {
+    const { data } = supabase.storage
+      .from(bucket || 'product-images')
+      .getPublicUrl(path, transform ? { transform } : undefined)
 
-        if (error) {
-          console.error('Error creating signed URL for image:', error)
-          return null
-        }
+    return data.publicUrl
+  }
 
-        return {
-          ...image,
-          signed_url: signedUrl.signedUrl
-        }
-      } catch (err) {
-        console.error('Error processing image:', err)
-        return null
+  const imagesWithUrls = productImages.map((image) => {
+    try {
+      const publicUrl = buildPublicUrl(image.bucket, image.path)
+      const cardUrl = buildPublicUrl(image.bucket, image.path, {
+        width: 420,
+        height: 280,
+        quality: 70,
+        resize: 'contain'
+      })
+      const thumbUrl = buildPublicUrl(image.bucket, image.path, {
+        width: 160,
+        height: 120,
+        quality: 60,
+        resize: 'contain'
+      })
+
+      return {
+        ...image,
+        public_url: publicUrl,
+        card_url: cardUrl,
+        thumb_url: thumbUrl
       }
-    })
-  )
+    } catch (err) {
+      console.error('Error processing image:', err)
+      return null
+    }
+  })
 
-  // Filter out any failed images and sort by sort_order
   return imagesWithUrls
     .filter(image => image !== null)
     .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
 }
-
 /**
  * Get all products with their related data (brands, conditions, product types, inventory)
  * @returns {Promise<{success: boolean, data?: any[], error?: string}>}
@@ -204,7 +215,7 @@ export async function getProducts() {
         // Product images
         images: productImages,
         primary_image: primaryImage,
-        image_url: primaryImage?.signed_url || null // For backward compatibility
+        image_url: primaryImage?.card_url || primaryImage?.public_url || null // For backward compatibility
       }
     })
 
@@ -407,7 +418,7 @@ export async function getCombos() {
       const firstComboProductId = combo.combo_items?.[0]?.product_id
       const firstComboProductImages = firstComboProductId ? (productImagesMap[firstComboProductId] || []) : []
       const comboImage = firstComboProductImages.find(img => img.is_primary) || firstComboProductImages[0]
-      const comboImageUrl = comboImage?.signed_url || null
+      const comboImageUrl = comboImage?.card_url || comboImage?.public_url || null
       
       if (comboImageUrl) {
         comboPrimaryImage = comboImage
@@ -639,7 +650,7 @@ export async function getKits() {
       const firstKitProductId = kit.kit_items?.[0]?.product_id
       const firstKitProductImages = firstKitProductId ? (productImagesMap[firstKitProductId] || []) : []
       const kitImage = firstKitProductImages.find(img => img.is_primary) || firstKitProductImages[0]
-      const kitImageUrl = kitImage?.signed_url || null
+      const kitImageUrl = kitImage?.card_url || kitImage?.public_url || null
       
       if (kitImageUrl) {
         kitPrimaryImage = kitImage
@@ -1236,7 +1247,7 @@ export async function getProductById(productId) {
       // Product images
       images: productImages,
       primary_image: primaryImage,
-      image_url: primaryImage?.signed_url || null // For backward compatibility
+      image_url: primaryImage?.card_url || primaryImage?.public_url || null // For backward compatibility
     }
 
     return { success: true, data: transformedData }

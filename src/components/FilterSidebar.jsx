@@ -5,12 +5,12 @@ export default function FilterSidebar({
   priceRange,
   priceInputs,
   setPriceInputs,
+  selectedItemTypes,
+  handleItemTypeChange,
   selectedBrands,
   handleBrandChange,
   selectedConditions,
   handleConditionChange,
-  selectedLocations,
-  handleLocationChange,
   selectedProductTypes,
   handleProductTypeChange,
   // FIXED: Added optional power sources support for products page
@@ -23,7 +23,7 @@ export default function FilterSidebar({
   showOnlyWithImages,
   setShowOnlyWithImages
 }) {
-  const { t } = useLanguage();
+  const { t, translateConditionName } = useLanguage();
   const [expandedSections, setExpandedSections] = useState(new Set(['brands']));
 
   const toggleSection = (section) => {
@@ -80,7 +80,7 @@ export default function FilterSidebar({
     );
   };
 
-  const CheckboxList = ({ items, selected, onChange, getLabel = (item) => item }) => (
+  const CheckboxList = ({ items, selected, onChange, getLabel = (item) => item, getDisplayLabel = null }) => (
     <div className="space-y-2">
       {items.map((item) => (
         <label
@@ -94,7 +94,7 @@ export default function FilterSidebar({
             className="accent-makmex-orange flex-shrink-0"
           />
           <span className="break-words">
-            {typeof item === 'string' ? item : getLabel(item)}
+            {typeof item === 'string' ? item : (getDisplayLabel ? getDisplayLabel(item) : getLabel(item))}
           </span>
         </label>
       ))}
@@ -102,13 +102,33 @@ export default function FilterSidebar({
   );
 
   return (
-    <div className="sticky top-6 rounded-2xl border border-makmex-border bg-makmex-surface p-5">
+    <div className="rounded-2xl border border-makmex-border bg-makmex-surface p-5 pr-3">
       {/* Header */}
       <div className="mb-5">
         <h2 className="text-lg font-bold text-makmex-text">{t('filters')}</h2>
       </div>
 
       <div className="space-y-3 text-sm text-makmex-text">
+      {availableFilterOptions.itemTypes?.length > 0 && selectedItemTypes && handleItemTypeChange && (
+      <div className="border border-makmex-border rounded-xl bg-makmex-panel p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <span className="text-sm font-bold uppercase tracking-wide text-makmex-muted">{t('items')}</span>
+          {selectedItemTypes.size > 0 && (
+            <span className="bg-makmex-orange text-black text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+              {selectedItemTypes.size}
+            </span>
+          )}
+        </div>
+        <CheckboxList
+          items={availableFilterOptions.itemTypes}
+          selected={selectedItemTypes}
+          onChange={handleItemTypeChange}
+          getLabel={(itemType) => itemType.value}
+          getDisplayLabel={(itemType) => itemType.label}
+        />
+      </div>
+      )}
+
       <FilterSection title={t('priceRange')} sectionKey="price">
         <div className="space-y-3">
           <div className="flex gap-2 items-center">
@@ -218,6 +238,7 @@ export default function FilterSidebar({
           selected={selectedConditions}
           onChange={handleConditionChange}
           getLabel={(condition) => condition.general_condition}
+          getDisplayLabel={(condition) => translateConditionName(condition.general_condition)}
         />
       </FilterSection>
       )}
@@ -234,17 +255,6 @@ export default function FilterSidebar({
             handlePowerSourceChange(value);
           }}
           getLabel={(powerSource) => typeof powerSource === 'string' ? powerSource : (powerSource.display || powerSource.value || powerSource)}
-        />
-      </FilterSection>
-      )}
-
-      {/* Locations */}
-      {availableFilterOptions.locations?.length > 0 && (
-      <FilterSection title={t('locations')} sectionKey="locations" selectedCount={selectedLocations.size}>
-        <CheckboxList
-          items={availableFilterOptions.locations}
-          selected={selectedLocations}
-          onChange={handleLocationChange}
         />
       </FilterSection>
       )}

@@ -1,17 +1,161 @@
 import { useMemo, useState, useEffect } from "react";
-import ProductCard from "../components/ProductCard";
+import { useSearchParams } from "react-router-dom";
+import ItemCard from "../components/ItemCard";
 import FilterSidebar from "../components/FilterSidebar";
-import { getProducts, getBrands, getConditions, getWarehouses, getPowerSources } from "../lib/supabase";
+import { getProducts, getCombos, getKits, getConditions, getPowerSources } from "../lib/supabase";
 import { useLanguage } from "../context/LanguageContext";
+import { useLocations } from "../context/LocationContext";
 
-export default function CategoryPage({ title = "Power Tools" }) {
-  const { t } = useLanguage();  // FIXED: Added language support
+const CONDITION_ORDER = ['AA', 'A', 'B', 'C', 'D', 'E', 'F'];
+
+const getSubItems = (item) => {
+  if (item.type === 'combo') return item.combo_items || [];
+  if (item.type === 'kit') return item.kit_items || [];
+  return [];
+};
+
+const getItemBrands = (item) => {
+  const values = new Set();
+  if (item.brand_name) values.add(item.brand_name);
+
+  getSubItems(item).forEach((subItem) => {
+    const nestedBrand = subItem.products?.brand_name || subItem.products?.brands?.name;
+    if (nestedBrand) values.add(nestedBrand);
+  });
+
+  return values;
+};
+
+const getItemConditions = (item) => {
+  const values = new Set();
+  if (item.condition_name) values.add(item.condition_name);
+
+  getSubItems(item).forEach((subItem) => {
+    const nestedCondition = subItem.products?.condition_name || subItem.products?.conditions?.general_condition;
+    if (nestedCondition) values.add(nestedCondition);
+  });
+
+  return values;
+};
+
+const getItemProductTypes = (item) => {
+  const values = new Set();
+  if (item.product_type_name) values.add(item.product_type_name);
+
+  getSubItems(item).forEach((subItem) => {
+    const nestedType = subItem.products?.product_type_name || subItem.products?.product_types?.name;
+    if (nestedType) values.add(nestedType);
+  });
+
+  return values;
+};
+
+const getItemPowerSources = (item) => {
+  const values = new Set();
+  if (item.power_source) values.add(item.power_source);
+
+  getSubItems(item).forEach((subItem) => {
+    const nestedPower = subItem.products?.power_source;
+    if (nestedPower) values.add(nestedPower);
+  });
+
+  return values;
+};
+
+const hasItemImage = (item) => {
+  if (item.primary_image?.public_url || item.image_url) return true;
+  if (item.images && item.images.length > 0) return true;
+
+  const subHasImage = getSubItems(item).some((subItem) => {
+    if (subItem.products?.primary_image?.public_url || subItem.products?.image_url) return true;
+    return Boolean(subItem.products?.images?.length);
+  });
+
+  return subHasImage;
+};
+
+const normalizeSearchText = (value) =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+const buildSearchBlob = (item) => {
+  const rootParts = [
+    item.name,
+    item.description,
+    item.display_sku,
+    item.model,
+    item.brand_name,
+    item.power_source,
+    item.product_type_name,
+    item.condition_name,
+    item.warehouse_location
+  ];
+
+  const nestedParts = getSubItems(item).flatMap((subItem) => {
+    const nestedProduct = subItem.products || {};
+    return [
+      nestedProduct.name,
+      nestedProduct.description,
+      nestedProduct.display_sku,
+      nestedProduct.model,
+      nestedProduct.brand_name,
+      nestedProduct.product_type_name,
+      nestedProduct.power_source,
+      nestedProduct.condition_name
+    ];
+  });
+
+  const base = normalizeSearchText(rootParts.filter(Boolean).join(" "));
+  const nested = normalizeSearchText(nestedParts.filter(Boolean).join(" "));
+
+  return {
+    base,
+    nested,
+    full: `${base} ${nested}`.trim()
+  };
+};
+
+const calculateRelevanceScore = (item, query, tokens) => {
+  const title = normalizeSearchText(item.name || item.description || "");
+  const sku = normalizeSearchText(item.display_sku || "");
+  const brand = normalizeSearchText(item.brand_name || "");
+  const { base, nested, full } = buildSearchBlob(item);
+
+  if (!full || !query) return 0;
+
+  let score = 0;
+
+  if (title === query) score += 180;
+  if (title.includes(query)) score += 110;
+  if (sku && (sku === query || sku.includes(query))) score += 90;
+  if (brand && brand.includes(query)) score += 45;
+  if (base.includes(query)) score += 70;
+  if (nested.includes(query)) score += 35;
+
+  tokens.forEach((token) => {
+    if (!token) return;
+
+    if (title.includes(token)) score += 24;
+    if (sku.includes(token)) score += 20;
+    if (brand.includes(token)) score += 14;
+    if (base.includes(token)) score += 10;
+    if (nested.includes(token)) score += 6;
+  });
+
+  return score;
+};
+
+export default function CategoryPage({ title = "Shopping" }) {
+  const { t } = useLanguage();
+  const { selectedLocations, toggleLocation, clearLocations, updateAvailableLocations } = useLocations();
+  const [searchParams] = useSearchParams();
 
   // Data state
-  const [products, setProducts] = useState([]);
-  const [brands, setBrands] = useState([]);
+  const [items, setItems] = useState([]);
   const [conditions, setConditions] = useState([]);
-  const [warehouses, setWarehouses] = useState([]);
   const [powerSources, setPowerSources] = useState([]);
   
   // Loading states
@@ -19,10 +163,10 @@ export default function CategoryPage({ title = "Power Tools" }) {
   const [error, setError] = useState(null);
 
   // Filters
+  const [selectedItemTypes, setSelectedItemTypes] = useState(new Set());
   const [selectedBrands, setSelectedBrands] = useState(new Set());
   const [selectedConditions, setSelectedConditions] = useState(new Set());
   const [selectedPowerSources, setSelectedPowerSources] = useState(new Set());
-  const [selectedLocations, setSelectedLocations] = useState(new Set());
   const [selectedProductTypes, setSelectedProductTypes] = useState(new Set());
   const [showOnlyWithImages, setShowOnlyWithImages] = useState(false);
   
@@ -32,10 +176,25 @@ export default function CategoryPage({ title = "Power Tools" }) {
 
   // Sorting
   const [sort, setSort] = useState("relevance");
+  const [viewMode, setViewMode] = useState(() => {
+    const saved = localStorage.getItem('makmex-shopping-view-mode');
+    return saved === 'standard' ? 'standard' : 'compact';
+  });
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(12);
+  const searchQuery = (searchParams.get("q") || "").trim();
+
+  const normalizedSearchQuery = useMemo(
+    () => normalizeSearchText(searchQuery),
+    [searchQuery]
+  );
+
+  const searchTokens = useMemo(
+    () => normalizedSearchQuery.split(/\s+/).filter(Boolean),
+    [normalizedSearchQuery]
+  );
 
   // Load data on mount
   useEffect(() => {
@@ -44,46 +203,48 @@ export default function CategoryPage({ title = "Power Tools" }) {
       setError(null);
 
       try {
-        // Load all data in parallel
         const [
           productsResult,
-          brandsResult,
+          combosResult,
+          kitsResult,
           conditionsResult,
-          warehousesResult,
           powerSourcesResult
         ] = await Promise.all([
           getProducts(),
-          getBrands(),
+          getCombos(),
+          getKits(),
           getConditions(),
-          getWarehouses(),
           getPowerSources()
         ]);
 
         if (!productsResult.success) {
           throw new Error(`Products: ${productsResult.error}`);
         }
-        if (!brandsResult.success) {
-          throw new Error(`Brands: ${brandsResult.error}`);
+        if (!combosResult.success) {
+          throw new Error(`Combos: ${combosResult.error}`);
+        }
+        if (!kitsResult.success) {
+          throw new Error(`Kits: ${kitsResult.error}`);
         }
         if (!conditionsResult.success) {
           throw new Error(`Conditions: ${conditionsResult.error}`);
-        }
-        if (!warehousesResult.success) {
-          throw new Error(`Warehouses: ${warehousesResult.error}`);
         }
         if (!powerSourcesResult.success) {
           throw new Error(`Power Sources: ${powerSourcesResult.error}`);
         }
 
-        setProducts(productsResult.data);
-        setBrands(brandsResult.data);
+        const unifiedItems = [
+          ...(productsResult.data || []),
+          ...(combosResult.data || []),
+          ...(kitsResult.data || [])
+        ];
+
+        setItems(unifiedItems);
         setConditions(conditionsResult.data);
-        setWarehouses(warehousesResult.data);
         setPowerSources(powerSourcesResult.data);
         
-        // Set price range bounds based on actual product prices
-        if (productsResult.data && productsResult.data.length > 0) {
-          const prices = productsResult.data.map(p => p.price);
+        if (unifiedItems.length > 0) {
+          const prices = unifiedItems.map((entry) => entry.price);
           const minPrice = Math.floor(Math.min(...prices));
           const maxPrice = Math.ceil(Math.max(...prices));
           setPriceRange({ min: minPrice, max: maxPrice });
@@ -91,7 +252,7 @@ export default function CategoryPage({ title = "Power Tools" }) {
         }
       } catch (err) {
         setError(err.message);
-        console.error("Error loading category page data:", err);
+        console.error("Error loading shopping page data:", err);
       } finally {
         setLoading(false);
       }
@@ -100,94 +261,138 @@ export default function CategoryPage({ title = "Power Tools" }) {
     loadData();
   }, []);
 
-  const filteredProducts = useMemo(() => {
-    let items = [...products];
+  useEffect(() => {
+    localStorage.setItem('makmex-shopping-view-mode', viewMode);
+  }, [viewMode]);
 
-    // Price range filter
+  const filteredItems = useMemo(() => {
+    let filtered = [...items];
+
     const minPrice = parseFloat(priceInputs.min) || 0;
     const maxPrice = parseFloat(priceInputs.max) || Infinity;
-    items = items.filter((p) => p.price >= minPrice && p.price <= maxPrice);
+    filtered = filtered.filter((entry) => entry.price >= minPrice && entry.price <= maxPrice);
 
-    // Brand filter (using brand_name from JOIN)
+    if (selectedItemTypes.size > 0) {
+      filtered = filtered.filter((entry) => selectedItemTypes.has(entry.type));
+    }
+
     if (selectedBrands.size > 0) {
-      items = items.filter((p) => selectedBrands.has(p.brand_name));
+      filtered = filtered.filter((entry) => {
+        const entryBrands = getItemBrands(entry);
+        return Array.from(selectedBrands).some((brand) => entryBrands.has(brand));
+      });
     }
 
-    // Condition filter (using condition_name from JOIN)
     if (selectedConditions.size > 0) {
-      items = items.filter((p) => selectedConditions.has(p.condition_name));
+      filtered = filtered.filter((entry) => {
+        const entryConditions = getItemConditions(entry);
+        return Array.from(selectedConditions).some((condition) => entryConditions.has(condition));
+      });
     }
 
-    // Power source filter
     if (selectedPowerSources.size > 0) {
-      items = items.filter((p) => {
-        if (!p.power_source) return false;
-        return selectedPowerSources.has(p.power_source);
+      filtered = filtered.filter((entry) => {
+        const entryPowerSources = getItemPowerSources(entry);
+        return Array.from(selectedPowerSources).some((powerSource) => entryPowerSources.has(powerSource));
       });
     }
 
-    // Location filter
     if (selectedLocations.size > 0) {
-      items = items.filter((p) => selectedLocations.has(p.warehouse_location));
+      filtered = filtered.filter((entry) => selectedLocations.has(entry.warehouse_location));
     }
 
-    // Product Type filter
     if (selectedProductTypes.size > 0) {
-      items = items.filter((p) => selectedProductTypes.has(p.product_type_name));
-    }
-
-    // FIXED: Images filter - only show items that have images (consistent with combos/kits)
-    if (showOnlyWithImages) {
-      items = items.filter((p) => {
-        // Check if product has primary_image with signed_url or images array
-        return p.primary_image?.signed_url || (p.images && p.images.length > 0);
+      filtered = filtered.filter((entry) => {
+        const entryTypes = getItemProductTypes(entry);
+        return Array.from(selectedProductTypes).some((productType) => entryTypes.has(productType));
       });
     }
 
-    // Sorting
-    if (sort === "price_asc") {
-      items.sort((a, b) => a.price - b.price);
-    } else if (sort === "price_desc") {
-      items.sort((a, b) => b.price - a.price);
-    } else if (sort === "newest") {
-      items.sort((a, b) => new Date(b.created_at || b.id) - new Date(a.created_at || a.id));
+    if (showOnlyWithImages) {
+      filtered = filtered.filter((entry) => hasItemImage(entry));
     }
 
-    return items;
-  }, [products, selectedBrands, selectedConditions, selectedPowerSources, selectedLocations, selectedProductTypes, showOnlyWithImages, sort, priceInputs]);
+    if (searchTokens.length > 0) {
+      const scoredEntries = filtered
+        .map((entry) => ({
+          entry,
+          score: calculateRelevanceScore(entry, normalizedSearchQuery, searchTokens)
+        }))
+        .filter(({ score }) => score > 0);
 
-  // Calculate available filter options based on current products in stock
+      if (sort === "relevance") {
+        scoredEntries.sort((a, b) => b.score - a.score || a.entry.price - b.entry.price);
+      }
+
+      filtered = scoredEntries.map(({ entry }) => entry);
+    }
+
+    if (sort === "price_asc") {
+      filtered.sort((a, b) => a.price - b.price);
+    } else if (sort === "price_desc") {
+      filtered.sort((a, b) => b.price - a.price);
+    } else if (sort === "newest") {
+      filtered.sort((a, b) => new Date(b.created_at || b.id) - new Date(a.created_at || a.id));
+    }
+
+    return filtered;
+  }, [
+    items,
+    selectedItemTypes,
+    selectedBrands,
+    selectedConditions,
+    selectedPowerSources,
+    selectedLocations,
+    selectedProductTypes,
+    showOnlyWithImages,
+    sort,
+    priceInputs,
+    normalizedSearchQuery,
+    searchTokens
+  ]);
+
   const availableFilterOptions = useMemo(() => {
-    // Only consider products that are in stock
-    const inStockProducts = products.filter(p => p.in_stock);
+    const inStockItems = items.filter((entry) => entry.in_stock);
+    const brandsSet = new Set();
+    const conditionsSet = new Set();
+    const productTypesSet = new Set();
+    const powerSourcesSet = new Set();
+
+    inStockItems.forEach((entry) => {
+      getItemBrands(entry).forEach((brand) => brandsSet.add(brand));
+      getItemConditions(entry).forEach((condition) => conditionsSet.add(condition));
+      getItemProductTypes(entry).forEach((productType) => productTypesSet.add(productType));
+      getItemPowerSources(entry).forEach((powerSource) => powerSourcesSet.add(powerSource));
+    });
     
     return {
-      brands: Array.from(new Set(inStockProducts.map(p => p.brand_name))).sort(),
-      conditions: conditions.filter(condition => 
-        inStockProducts.some(p => p.condition_name === condition.general_condition)
-      ).sort((a, b) => {
-        const order = ['AA', 'A', 'B', 'C', 'D', 'E', 'F'];
-        return order.indexOf(a.id) - order.indexOf(b.id);
+      itemTypes: [
+        { value: 'product', label: t('products') },
+        { value: 'combo', label: t('combos') },
+        { value: 'kit', label: t('kits') }
+      ],
+      brands: Array.from(brandsSet).sort(),
+      conditions: conditions
+        .filter((condition) => conditionsSet.has(condition.general_condition))
+        .sort((a, b) => CONDITION_ORDER.indexOf(a.id) - CONDITION_ORDER.indexOf(b.id)),
+      productTypes: Array.from(productTypesSet).sort(),
+      powerSources: powerSources.filter((powerSource) => {
+        const value = powerSource.value || powerSource;
+        return powerSourcesSet.has(value);
       }),
-      productTypes: Array.from(new Set(inStockProducts.map(p => p.product_type_name))).sort(),
-      powerSources: powerSources.filter(powerSource => 
-        inStockProducts.some(p => p.power_source === (powerSource.value || powerSource))
-      ),
-      locations: Array.from(new Set(inStockProducts.map(p => p.warehouse_location).filter(Boolean))).sort()
+      locations: Array.from(new Set(inStockItems.map((entry) => entry.warehouse_location).filter(Boolean))).sort()
     };
-  }, [products, conditions, powerSources]);
+  }, [items, conditions, powerSources, t]);
 
-  // Pagination calculations
-  const totalItems = filteredProducts.length;
+  const totalItems = filteredItems.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const shownProducts = filteredProducts.slice(startIndex, endIndex);
+  const shownItems = filteredItems.slice(startIndex, endIndex);
 
-  // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedBrands, selectedConditions, selectedPowerSources, selectedLocations, selectedProductTypes, showOnlyWithImages, sort, priceInputs]);
+  }, [selectedItemTypes, selectedBrands, selectedConditions, selectedPowerSources, selectedLocations, selectedProductTypes, showOnlyWithImages, sort, priceInputs, normalizedSearchQuery]);
 
   // Pagination handlers
   const goToPage = (page) => {
@@ -207,7 +412,15 @@ export default function CategoryPage({ title = "Power Tools" }) {
     setCurrentPage(1);
   };
 
-  // FIXED: Consolidated filter handlers to match FilterSidebar API
+  const handleItemTypeChange = (itemType) => {
+    setSelectedItemTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemType)) next.delete(itemType);
+      else next.add(itemType);
+      return next;
+    });
+  };
+
   const handleBrandChange = (brand) => {
     setSelectedBrands((prev) => {
       const next = new Set(prev);
@@ -227,12 +440,7 @@ export default function CategoryPage({ title = "Power Tools" }) {
   };
 
   const handleLocationChange = (location) => {
-    setSelectedLocations((prev) => {
-      const next = new Set(prev);
-      if (next.has(location)) next.delete(location);
-      else next.add(location);
-      return next;
-    });
+    toggleLocation(location);
   };
 
   const handleProductTypeChange = (productType) => {
@@ -255,35 +463,79 @@ export default function CategoryPage({ title = "Power Tools" }) {
 
   const clearAllFilters = () => {
     setSelectedBrands(new Set());
+    setSelectedItemTypes(new Set());
     setSelectedConditions(new Set());
     setSelectedPowerSources(new Set());
-    setSelectedLocations(new Set());
+    clearLocations();
     setSelectedProductTypes(new Set());
     setShowOnlyWithImages(false);
     setSort("relevance");
     setCurrentPage(1);
     
-    // Reset price range to full range
-    if (products.length > 0) {
-      const prices = products.map(p => p.price);
+    if (items.length > 0) {
+      const prices = items.map((entry) => entry.price);
       const minPrice = Math.floor(Math.min(...prices));
       const maxPrice = Math.ceil(Math.max(...prices));
       setPriceInputs({ min: minPrice.toString(), max: maxPrice.toString() });
     }
   };
 
+  useEffect(() => {
+    updateAvailableLocations(availableFilterOptions.locations || []);
+  }, [availableFilterOptions.locations, updateAvailableLocations]);
+
+  useEffect(() => {
+    const brandFromQuery = searchParams.get("brand");
+    if (!brandFromQuery) return;
+
+    setSelectedBrands(new Set([brandFromQuery]));
+    setCurrentPage(1);
+  }, [searchParams]);
+
   return (
     <div className="space-y-6">
-      {/* Header row */}
-      <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight">{title}</h1>
-          <p className="mt-1 text-sm text-makmex-muted">
-            {loading ? t('loading') + "..." : `${t('showing') || 'Showing'} ${startIndex + 1}-${Math.min(endIndex, totalItems)} ${t('of') || 'of'} ${totalItems} ${t('results') || 'results'}`}
+      <section className="relative overflow-hidden rounded-3xl border border-makmex-border bg-gradient-to-br from-makmex-panel via-makmex-bg to-black p-8 md:p-12">
+        <div className="absolute -right-16 -top-16 h-72 w-72 rounded-full bg-makmex-orange/15 blur-3xl" />
+        <div className="absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl" />
+
+        <div className="relative z-10 max-w-3xl space-y-4">
+          <span className="inline-flex rounded-full border border-makmex-orange/40 bg-makmex-orange/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-makmex-orange">
+            {t('shopping')}
+          </span>
+          <h1 className="text-4xl font-extrabold leading-tight md:text-5xl">{title}</h1>
+          <p className="text-sm text-makmex-muted md:text-base">
+            {t('shoppingPageSubtitle') || 'Browse products, combos, and kits with unified filters and view controls.'}
           </p>
         </div>
+      </section>
 
-        <div className="flex items-center gap-4">
+      {/* Controls row (directly above pagination) */}
+      <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-4 lg:pl-3">
+        <p className="text-sm text-makmex-muted">
+          {loading ? `${t('loading')}...` : `${t('Showing') || 'Showing'} ${startIndex + 1}-${Math.min(endIndex, totalItems)} ${t('of') || 'of'} ${totalItems} ${t('results') || 'results'}`}
+        </p>
+
+        <div className="flex items-center gap-4 flex-wrap justify-end">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-makmex-muted">{t('viewMode')}:</span>
+            <div className="inline-flex rounded-lg border border-makmex-border bg-makmex-surface p-1">
+              <button
+                type="button"
+                onClick={() => setViewMode('compact')}
+                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${viewMode === 'compact' ? 'bg-makmex-orange text-black' : 'text-makmex-muted hover:text-makmex-text'}`}
+              >
+                {t('compact')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('standard')}
+                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${viewMode === 'standard' ? 'bg-makmex-orange text-black' : 'text-makmex-muted hover:text-makmex-text'}`}
+              >
+                {t('standard')}
+              </button>
+            </div>
+          </div>
+
           {/* Items per page selector */}
           <div className="flex items-center gap-2">
             <span className="text-sm text-makmex-muted">Show:</span>
@@ -323,20 +575,22 @@ export default function CategoryPage({ title = "Power Tools" }) {
 
       {/* Top Pagination */}
       {!loading && !error && totalPages > 1 && (
-        <PaginationControls 
-          currentPage={currentPage}
-          totalPages={totalPages}
-          totalItems={totalItems}
-          onPageChange={goToPage}
-          onPreviousPage={goToPreviousPage}
-          onNextPage={goToNextPage}
-        />
+        <div className="lg:pl-3">
+          <PaginationControls 
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            onPageChange={goToPage}
+            onPreviousPage={goToPreviousPage}
+            onNextPage={goToNextPage}
+          />
+        </div>
       )}
 
       {/* Error State */}
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
-          <h3 className="text-lg font-semibold text-red-800">{t('error')} {t('loading')} {t('products')}</h3>
+          <h3 className="text-lg font-semibold text-red-800">{t('error')} {t('loading')} {title}</h3>
           <p className="mt-2 text-sm text-red-600">{error}</p>
           <button
             onClick={() => window.location.reload()}
@@ -352,7 +606,7 @@ export default function CategoryPage({ title = "Power Tools" }) {
         <div className="flex justify-center py-12">
           <div className="flex items-center gap-2 text-makmex-muted">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-makmex-orange border-t-transparent"></div>
-            {t('loading')} {t('products').toLowerCase()}...
+            {t('loading')} {title.toLowerCase()}...
           </div>
         </div>
       )}
@@ -360,18 +614,17 @@ export default function CategoryPage({ title = "Power Tools" }) {
       {/* Main Content */}
       {!loading && !error && (
         <div className="flex gap-6">
-          {/* FIXED: Now uses FilterSidebar component with language support */}
           <aside className="w-72 flex-shrink-0">
             <FilterSidebar
               priceRange={priceRange}
               priceInputs={priceInputs}
               setPriceInputs={setPriceInputs}
+              selectedItemTypes={selectedItemTypes}
+              handleItemTypeChange={handleItemTypeChange}
               selectedBrands={selectedBrands}
               handleBrandChange={handleBrandChange}
               selectedConditions={selectedConditions}
               handleConditionChange={handleConditionChange}
-              selectedLocations={selectedLocations}
-              handleLocationChange={handleLocationChange}
               selectedProductTypes={selectedProductTypes}
               handleProductTypeChange={handleProductTypeChange}
               selectedPowerSources={selectedPowerSources}
@@ -383,19 +636,22 @@ export default function CategoryPage({ title = "Power Tools" }) {
             />
           </aside>
 
-          {/* Product Grid */}
-          <div className="flex-1">
-            {shownProducts.length === 0 ? (
+          {/* Item Grid */}
+          <div className="flex-1 min-w-0">
+            {shownItems.length === 0 ? (
               <div className="rounded-2xl border border-makmex-border bg-makmex-surface p-12 text-center">
-                <h3 className="text-lg font-semibold text-makmex-text">No products found</h3>
+                <h3 className="text-lg font-semibold text-makmex-text">No items found</h3>
                 <p className="mt-2 text-sm text-makmex-muted">
                   Try adjusting your filters or check back later for new inventory.
                 </p>
               </div>
             ) : (
-              <section className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-3">
-                {shownProducts.map((product) => (
-                  <ProductCard key={product.id} {...product} />
+              <section className={viewMode === 'compact'
+                ? "grid gap-6 [grid-template-columns:repeat(3,280px)]"
+                : "flex flex-col gap-4"
+              }>
+                {shownItems.map((item) => (
+                  <ItemCard key={`${item.type}-${item.id}`} layout={viewMode} {...item} />
                 ))}
               </section>
             )}

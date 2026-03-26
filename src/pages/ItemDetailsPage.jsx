@@ -284,10 +284,9 @@ export default function ItemDetailsPage() {
   // Prepare images array
   const images = [];
   if (type === 'product') {
-    // Use signed URLs from product_images table
     if (item.images && item.images.length > 0) {
       item.images.forEach(img => {
-        if (img.signed_url) images.push(img.signed_url);
+        if (img.public_url) images.push(img.public_url);
       });
     } else if (item.image_url) {
       // Fallback to legacy image_url if no product_images exist
@@ -304,7 +303,7 @@ export default function ItemDetailsPage() {
         // First try to use product images from the sub-item's products
         if (subItem.products?.images && subItem.products.images.length > 0) {
           subItem.products.images.forEach(img => {
-            if (img.signed_url) images.push(img.signed_url);
+            if (img.public_url) images.push(img.public_url);
           });
         } else if (subItem.products?.image_url) {
           // Fallback to legacy image_url

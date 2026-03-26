@@ -5,10 +5,12 @@ const LanguageContext = createContext();
 const translations = {
   en: {
     // Navigation
+    shopping: "Shopping",
     products: "Products",
     combos: "Combos", 
     kits: "Kits",
     brands: "Brands",
+    contact: "Contact Us",
     deals: "Deals",
     
     // Promo & Locations
@@ -33,12 +35,15 @@ const translations = {
     
     // Filters
     filters: "Filters",
+    types: "Types",
+    viewMode: "View",
+    compact: "Compact",
+    standard: "Standard",
     clearAll: "Clear All",
     priceRange: "Price Range",
     min: "Min",
     max: "Max", 
     applyPriceRange: "Apply Price Range",
-    brands: "Brands",
     conditions: "Conditions",
     locations: "Locations",
     productTypes: "Product Types",
@@ -91,8 +96,10 @@ const translations = {
     type: "Type",
     power: "Power",
     location: "Location",
+    selectLocations: "Select Locations",
+    selectedLocations: "Selected Locations",
+    noLocationsAvailable: "No locations available",
     role: "Role",
-    items: "Items",
     pieces: "pieces",
     backToCatalog: "Back to catalog",
     quantity: "Quantity",
@@ -113,7 +120,6 @@ const translations = {
     limitedStock: "Only {quantity} left in stock!",
     
     // Common
-    available: "available",
     loading: "Loading",
     error: "Error loading",
     onlyLeft: "Only",
@@ -121,16 +127,32 @@ const translations = {
     search: "Search",
     searchPlaceholder: "Search tools, batteries, kits…",
     specs: "Specs",
+    brandsPageTitle: "Explore Our Brands",
+    brandsPageSubtitle: "Browse MakMex's stock by top leading brands.",
+    shoppingPageSubtitle: "Browse MakMex's stock of products, kits, and combos.",
+    brandLogoPlaceholder: "Brand logo placeholder",
+    itemInStock: "item in stock",
+    itemsInStock: "items in stock",
+    shopWithBrand: "Shop with {brand}",
+    contactPageTitle: "Contact Us",
+    contactPageSubtitle: "Find store addresses and reach each branch by phone or email.",
+    contactAddress: "Address",
+    contactPhone: "Phone",
+    contactEmail: "Email",
+    contactHours: "Business Hours",
+    contactHoursValue: "Mon - Sat • 9:00 AM - 7:00 PM",
     
     // Currency
     currency: "MX$"
   },
   es: {
     // Navigation  
+    shopping: "Compras",
     products: "Productos",
     combos: "Combos",
     kits: "Kits", 
     brands: "Marcas",
+    contact: "Contáctanos",
     deals: "Ofertas",
     
     // Promo & Locations
@@ -155,12 +177,15 @@ const translations = {
     
     // Filters
     filters: "Filtros",
+    types: "Tipos",
+    viewMode: "Vista",
+    compact: "Compacto",
+    standard: "Estándar",
     clearAll: "Limpiar Todo",
     priceRange: "Rango de Precio",
     min: "Mín",
     max: "Máx",
     applyPriceRange: "Aplicar Rango de Precio",
-    brands: "Marcas", 
     conditions: "Condiciones",
     locations: "Ubicaciones",
     productTypes: "Tipos de Producto",
@@ -213,8 +238,10 @@ const translations = {
     type: "Tipo",
     power: "Energía",
     location: "Ubicación",
+    selectLocations: "Seleccionar ubicaciones",
+    selectedLocations: "Ubicaciones seleccionadas",
+    noLocationsAvailable: "No hay ubicaciones disponibles",
     role: "Rol",
-    items: "Artículos",
     pieces: "piezas",
     backToCatalog: "Volver al catálogo",
     quantity: "Cantidad",
@@ -235,7 +262,6 @@ const translations = {
     limitedStock: "¡Solo {quantity} resto en stock!",
     
     // Common
-    available: "disponible",
     loading: "Cargando",
     error: "Error al cargar",
     onlyLeft: "Solo",
@@ -243,6 +269,20 @@ const translations = {
     search: "Buscar",
     searchPlaceholder: "Buscar herramientas, baterías, kits…",
     specs: "Especificaciones",
+    brandsPageTitle: "Explora Nuestras Marcas",
+    brandsPageSubtitle: "Explora el inventario de MakMex por marcas líderes.",
+    shoppingPageSubtitle: "Explora el inventario de MakMex de productos, kits y combos.",
+    brandLogoPlaceholder: "Espacio para logotipo de marca",
+    itemInStock: "artículo en stock",
+    itemsInStock: "artículos en stock",
+    shopWithBrand: "Comprar con {brand}",
+    contactPageTitle: "Contáctanos",
+    contactPageSubtitle: "Encuentra direcciones de tienda y contacta cada sucursal por teléfono o correo.",
+    contactAddress: "Dirección",
+    contactPhone: "Teléfono",
+    contactEmail: "Correo",
+    contactHours: "Horario",
+    contactHoursValue: "Lun - Sáb • 9:00 AM - 7:00 PM",
     
     // Currency
     currency: "$"
@@ -300,18 +340,25 @@ export function LanguageProvider({ children }) {
     return key ? t(key) : conditionId;
   };
 
-  // Helper to translate condition names by full name
+  // Helper to translate condition names by full name (tolerant to formatting/case variants)
   const translateConditionName = (fullConditionName) => {
+    if (!fullConditionName) return fullConditionName;
+
+    const normalized = String(fullConditionName).trim().toLowerCase();
     const nameMap = {
-      'New in Box': 'conditionAA',
-      'New without a box': 'conditionA',
-      'Pre-owned (minimal defects)': 'conditionB',
-      'Pre-owned (moderate wear)': 'conditionC',
-      'Used': 'conditionD',
-      'Used (notable touches)': 'conditionE',
-      'Very Used': 'conditionF'
+      'new': 'conditionAA',
+      'new in box': 'conditionAA',
+      'new (in box)': 'conditionAA',
+      'new without a box': 'conditionA',
+      'new (without a box)': 'conditionA',
+      'pre-owned (minimal defects)': 'conditionB',
+      'pre-owned (moderate wear)': 'conditionC',
+      'used': 'conditionD',
+      'used (notable touches)': 'conditionE',
+      'very used': 'conditionF'
     };
-    const key = nameMap[fullConditionName];
+
+    const key = nameMap[normalized];
     return key ? t(key) : fullConditionName;
   };
 

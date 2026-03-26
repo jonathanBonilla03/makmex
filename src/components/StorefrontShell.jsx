@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useLanguage } from "../context/LanguageContext";
+import { useLocations } from "../context/LocationContext";
 
 function Icon({ children }) {
   return (
@@ -152,10 +153,74 @@ function CartSidebar({ isOpen, onClose }) {
 export default function StorefrontShell({ children }) {
   const [query, setQuery] = useState("");
   const [isCartSidebarOpen, setIsCartSidebarOpen] = useState(false);
+  const [isLocationMenuOpen, setIsLocationMenuOpen] = useState(false);
+  const locationMenuRef = useRef(null);
+  const location = useLocation();
+  const navigate = useNavigate();
   const { t, language, toggleLanguage } = useLanguage();
+  const { selectedLocations, availableLocations, toggleLocation } = useLocations();
+
+  const getLocationShortLabel = (location) => {
+    const knownLabels = {
+      "Mexico City": "CDMX"
+    };
+
+    if (knownLabels[location]) return knownLabels[location];
+
+    if (location.includes(" ")) {
+      const short = location
+        .split(" ")
+        .filter(Boolean)
+        .map((part) => part[0])
+        .join("")
+        .toUpperCase();
+      return short || location.slice(0, 4).toUpperCase();
+    }
+
+    return location.slice(0, 4).toUpperCase();
+  };
+
+  const selectedLocationArray = Array.from(selectedLocations);
+  const selectedLocationSummary = selectedLocationArray.length === 1
+    ? selectedLocationArray[0]
+    : selectedLocationArray.length > 1
+      ? `${selectedLocationArray.length} ${t('selectedLocations')}`
+      : t('selectLocations');
+
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (locationMenuRef.current && !locationMenuRef.current.contains(event.target)) {
+        setIsLocationMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    setQuery(params.get('q') || '');
+  }, [location.pathname, location.search]);
 
   const toggleCartSidebar = () => {
     setIsCartSidebarOpen(!isCartSidebarOpen);
+  };
+
+  const handleSearchSubmit = () => {
+    const trimmedQuery = query.trim();
+    const params = location.pathname === '/shopping'
+      ? new URLSearchParams(location.search)
+      : new URLSearchParams();
+
+    if (trimmedQuery) {
+      params.set('q', trimmedQuery);
+    } else {
+      params.delete('q');
+    }
+
+    const queryString = params.toString();
+    navigate(`/shopping${queryString ? `?${queryString}` : ''}`);
   };
 
   return (
@@ -163,7 +228,7 @@ export default function StorefrontShell({ children }) {
       {/* Top promo bar */}
       <div className="border-b border-makmex-border bg-black/40">
         <div className="mx-auto max-w-7xl px-4 py-2 text-center text-xs text-makmex-muted">
-          {t('upToOff')} • {t('freePickup')} • {t('fastShipping')}
+          WORK IN PROGRESS
         </div>
       </div>
 
@@ -176,9 +241,12 @@ export default function StorefrontShell({ children }) {
           <div className="flex items-center gap-3">
             {/* Brand */}
             <div className="flex items-center gap-2">
-              <div className="rounded-xl bg-makmex-orange px-3 py-2 font-extrabold tracking-tight text-black">
+              <Link
+                to="/"
+                className="rounded-xl bg-makmex-orange px-3 py-2 font-extrabold tracking-tight text-black hover:bg-makmex-ember transition-colors"
+              >
                 MAKMEX
-              </div>
+              </Link>
               <div className="hidden text-sm font-semibold text-makmex-muted sm:block">
                 Store
               </div>
@@ -186,7 +254,13 @@ export default function StorefrontShell({ children }) {
 
             {/* Search */}
             <div className="flex-1">
-              <div className="flex items-center overflow-hidden rounded-2xl border border-makmex-border bg-makmex-surface">
+              <form
+                className="flex items-center overflow-hidden rounded-2xl border border-makmex-border bg-makmex-surface"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  handleSearchSubmit();
+                }}
+              >
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
@@ -194,12 +268,12 @@ export default function StorefrontShell({ children }) {
                   className="w-full bg-transparent px-4 py-3 text-sm outline-none placeholder:text-makmex-muted/70"
                 />
                 <button
+                  type="submit"
                   className="m-1 rounded-xl bg-makmex-orange px-4 py-2 text-sm font-semibold text-black hover:bg-makmex-ember"
-                  onClick={() => console.log("search:", query)}
                 >
                   {t('search') || 'Search'}
                 </button>
-              </div>
+              </form>
             </div>
 
             {/* Actions */}
@@ -229,11 +303,9 @@ export default function StorefrontShell({ children }) {
           <nav className="mx-auto flex max-w-7xl items-center gap-1 px-4 py-2 text-sm">
         
 {[
-  { label: t('products'), to: "/products" },
-  { label: t('combos'), to: "/combos" },
-  { label: t('kits'), to: "/kits" },
+  { label: t('shopping'), to: "/shopping" },
   { label: t('brands'), to: "/brands" },
-  { label: t('deals'), to: "/deals" },
+  { label: t('contact'), to: "/contact" },
 ].map((item) => (
   <Link
     key={item.label}
@@ -247,8 +319,41 @@ export default function StorefrontShell({ children }) {
 ))}
 
 
-            <div className="ml-auto hidden text-xs text-makmex-muted md:block">
-              {t('arizonaLocation')} • {t('pickup')}
+            <div className="relative ml-auto hidden md:block" ref={locationMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsLocationMenuOpen((prev) => !prev)}
+                className="inline-flex items-center gap-2 rounded-xl border border-makmex-border bg-makmex-surface px-3 py-2 text-xs font-semibold text-makmex-muted hover:border-makmex-orange/60 hover:text-makmex-text"
+              >
+                <span>{selectedLocationSummary}</span>
+                <svg className={`h-3 w-3 transition-transform ${isLocationMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {isLocationMenuOpen && (
+                <div className="absolute right-0 top-[calc(100%+0.5rem)] w-80 rounded-xl border border-makmex-border bg-makmex-panel p-3 shadow-card z-50">
+                  <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                    {availableLocations.length === 0 ? (
+                      <p className="text-xs text-makmex-muted">{t('noLocationsAvailable')}</p>
+                    ) : (
+                      availableLocations.map((location) => (
+                        <label key={location} className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-sm text-makmex-muted hover:bg-makmex-surface hover:text-makmex-text">
+                          <input
+                            type="checkbox"
+                            checked={selectedLocations.has(location)}
+                            onChange={() => toggleLocation(location)}
+                            className="accent-makmex-orange"
+                          />
+                          <span className="truncate">
+                            {location} ({getLocationShortLabel(location)})
+                          </span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </nav>
         </div>
