@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useLanguage } from "../context/LanguageContext";
 
-const REQUEST_TIMEOUT_MS = 12000;
+const REQUEST_TIMEOUT_MS = 20000;
 
 const { data: contactHeroImageData } = supabase.storage
   .from("web-images")

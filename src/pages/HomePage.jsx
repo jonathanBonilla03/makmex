@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase";
 import { useLanguage } from "../context/LanguageContext";
 import { getProducts } from "../lib/supabase";
 
-const REQUEST_TIMEOUT_MS = 12000;
+const REQUEST_TIMEOUT_MS = 20000;
 
 const getSafeImageUrl = (value) => {
   if (!value) return "";

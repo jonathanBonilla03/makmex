@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { getCombos, getKits, getProducts, supabase } from "../lib/supabase";
 import { useLanguage } from "../context/LanguageContext";
 
-const REQUEST_TIMEOUT_MS = 12000;
+const REQUEST_TIMEOUT_MS = 20000;
 
 const { data: brandsHeroImageData } = supabase.storage
   .from("web-images")

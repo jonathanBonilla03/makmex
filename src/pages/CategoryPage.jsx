@@ -7,7 +7,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { useLocations } from "../context/LocationContext";
 
 const CONDITION_ORDER = ['AA', 'A', 'B', 'C', 'D', 'E', 'F'];
-const REQUEST_TIMEOUT_MS = 12000;
+const REQUEST_TIMEOUT_MS = 20000;
 const WIDE_VIEW_MIN_WIDTH = 1024;
 
 const { data: shoppingHeroImageData } = supabase.storage
@@ -867,14 +867,13 @@ function PaginationControls({ currentPage, totalPages, totalItems, onPageChange,
         <button
           onClick={onPreviousPage}
           disabled={currentPage === 1}
-          className={`rounded-lg px-2 py-1.5 text-lg font-medium transition sm:px-3 sm:py-2 sm:text-sm sm:font-medium ${
+          className={`rounded-lg px-2 py-1.5 text-lg font-medium transition sm:px-3 sm:py-2 sm:text-lg ${
             currentPage === 1
               ? 'bg-makmex-surface text-makmex-muted cursor-not-allowed border border-makmex-border'
               : 'bg-makmex-panel text-makmex-text hover:bg-makmex-orange hover:text-black border border-makmex-border hover:border-makmex-orange'
           }`}
         >
-          <span className="sm:hidden">←</span>
-          <span className="hidden sm:inline">{t('previous')}</span>
+          ←
         </button>
         
         {/* Page numbers */}
@@ -908,14 +907,13 @@ function PaginationControls({ currentPage, totalPages, totalItems, onPageChange,
         <button
           onClick={onNextPage}
           disabled={currentPage === totalPages}
-          className={`rounded-lg px-2 py-1.5 text-lg font-medium transition sm:px-3 sm:py-2 sm:text-sm sm:font-medium ${
+          className={`rounded-lg px-2 py-1.5 text-lg font-medium transition sm:px-3 sm:py-2 sm:text-lg ${
             currentPage === totalPages
               ? 'bg-makmex-surface text-makmex-muted cursor-not-allowed border border-makmex-border'
               : 'bg-makmex-panel text-makmex-text hover:bg-makmex-orange hover:text-black border border-makmex-border hover:border-makmex-orange'
           }`}
         >
-          <span className="sm:hidden">→</span>
-          <span className="hidden sm:inline">{t('next')}</span>
+          →
         </button>
       </div>
     </div>
