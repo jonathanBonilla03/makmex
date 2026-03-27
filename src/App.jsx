@@ -2,32 +2,42 @@ import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import DatabaseConnectionWrapper from "./components/DatabaseConnectionWrapper"
 import StorefrontShell from "./components/StorefrontShell"
+import HomePage from "./pages/HomePage"
+import BrandsPage from "./pages/BrandsPage"
+import ContactPage from "./pages/ContactPage"
 import CategoryPage from "./pages/CategoryPage"
-
-function Placeholder({ title }) {
-  return (
-    <div className="rounded-2xl border border-makmex-border bg-makmex-surface p-6">
-      <h2 className="text-xl font-bold">{title}</h2>
-      <p className="mt-2 text-makmex-muted">Next we'll wire this to Supabase.</p>
-    </div>
-  );
-}
+import ItemDetailsPage from "./pages/ItemDetailsPage"
+import CheckoutPage from "./pages/CheckoutPage"
+import OrderSuccessPage from "./pages/OrderSuccessPage"
+import { CartProvider } from "./context/CartContext"
+import { LanguageProvider } from "./context/LanguageContext"
+import { LocationProvider } from "./context/LocationContext"
 
 export default function App() {
   return (
     <DatabaseConnectionWrapper>
-      <BrowserRouter>
-        <StorefrontShell>
-          <Routes>
-            <Route path="/" element={<Navigate to="/products" replace />} />
-            <Route path="/products" element={<CategoryPage title="Products" />} />
-            <Route path="/combos" element={<CategoryPage title="Combos" />} />
-            <Route path="/kits" element={<CategoryPage title="Kits" />} />
-            <Route path="/brands" element={<Placeholder title="Brands" />} />
-            <Route path="/deals" element={<Placeholder title="Deals" />} />
-          </Routes>
-        </StorefrontShell>
-      </BrowserRouter>
+      <LanguageProvider>
+        <CartProvider>
+          <LocationProvider>
+            <BrowserRouter>
+              <StorefrontShell>
+                <Routes>
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/shopping" element={<CategoryPage title="Shopping" />} />
+                  <Route path="/products" element={<Navigate to="/shopping" replace />} />
+                  <Route path="/combos" element={<Navigate to="/shopping" replace />} />
+                  <Route path="/kits" element={<Navigate to="/shopping" replace />} />
+                  <Route path="/item/:type/:id" element={<ItemDetailsPage />} />
+                  <Route path="/brands" element={<BrandsPage />} />
+                  <Route path="/contact" element={<ContactPage />} />
+                  <Route path="/checkout" element={<CheckoutPage />} />
+                  <Route path="/order-success" element={<OrderSuccessPage />} />
+                </Routes>
+              </StorefrontShell>
+            </BrowserRouter>
+          </LocationProvider>
+        </CartProvider>
+      </LanguageProvider>
     </DatabaseConnectionWrapper>
   )
 }
