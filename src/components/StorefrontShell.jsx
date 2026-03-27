@@ -161,7 +161,13 @@ export default function StorefrontShell({ children }) {
   const [query, setQuery] = useState("");
   const [isCartSidebarOpen, setIsCartSidebarOpen] = useState(false);
   const [isLocationMenuOpen, setIsLocationMenuOpen] = useState(false);
-  const [theme, setTheme] = useState(() => localStorage.getItem('makmex-theme') || 'light');
+  const [theme, setTheme] = useState(() => {
+    const savedTheme = localStorage.getItem('makmex-theme');
+    if (savedTheme === 'light' || savedTheme === 'dark') {
+      return savedTheme;
+    }
+    return 'dark';
+  });
   const locationMenuRef = useRef(null);
   const location = useLocation();
   const navigate = useNavigate();

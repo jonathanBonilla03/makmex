@@ -4,6 +4,8 @@ import { supabase } from "../lib/supabase";
 import { useLanguage } from "../context/LanguageContext";
 import { getProducts } from "../lib/supabase";
 
+const REQUEST_TIMEOUT_MS = 12000;
+
 const getSafeImageUrl = (value) => {
   if (!value) return "";
 
@@ -24,6 +26,14 @@ const { data: homeHeroImageData } = supabase.storage
   .getPublicUrl("home-page/Shelf-Showcase_Wide-MakMex.jpg");
 
 const homeHeroImageUrl = getSafeImageUrl(homeHeroImageData?.publicUrl || "");
+
+const withTimeout = (promise, label) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      window.setTimeout(() => reject(new Error(`${label} request timed out`)), REQUEST_TIMEOUT_MS);
+    })
+  ]);
 
 const sectionImagePaths = {
   "01": "home-page/Tool-Showcase-CloseUp-5.jpg",
@@ -97,7 +107,16 @@ export default function HomePage() {
 
   useEffect(() => {
     async function loadNewestProducts() {
-      const result = await getProducts();
+      let result;
+
+      try {
+        result = await withTimeout(getProducts(), "featured products");
+      } catch (err) {
+        console.error("Featured products load error:", err);
+        setNewestProducts([]);
+        return;
+      }
+
       if (!result.success || !result.data) {
         setNewestProducts([]);
         return;
@@ -213,13 +232,13 @@ export default function HomePage() {
             </Link>
             <Link
               to="/brands"
-              className="rounded-xl border border-makmex-border bg-makmex-surface px-5 py-3 text-sm font-semibold text-makmex-text transition-colors duration-300 hover:border-makmex-orange/60"
+              className="rounded-xl border border-makmex-border bg-makmex-surface px-5 py-3 text-sm font-semibold text-makmex-text transition-colors duration-300 hover:border-makmex-orange/60 hover:text-makmex-orange"
             >
               {t("brandsPageTitle")}
             </Link>
             <Link
               to="/contact"
-              className="rounded-xl border border-makmex-border bg-makmex-surface px-5 py-3 text-sm font-semibold text-makmex-text transition-colors duration-300 hover:border-makmex-orange/60"
+              className="rounded-xl border border-makmex-border bg-makmex-surface px-5 py-3 text-sm font-semibold text-makmex-text transition-colors duration-300 hover:border-makmex-orange/60 hover:text-makmex-orange"
             >
               {t("contact")}
             </Link>

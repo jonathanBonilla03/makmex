@@ -45,7 +45,7 @@ function getTypeBadge(type, t) {
     return { label: `🧰 ${t('kit')}`, className: 'type-badge-accent bg-purple-500/20 text-purple-300' };
   }
 
-  return { label: `🛠️ ${t('product')}`, className: 'bg-makmex-surface text-makmex-muted border border-makmex-border' };
+  return { label: `🛠️ ${t('product')}`, className: 'type-badge-accent bg-makmex-surface text-makmex-muted border border-makmex-border' };
 }
 
 export default function ItemCard({

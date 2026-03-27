@@ -84,6 +84,14 @@ const translations = {
     priceLowToHigh: "Price: Low to High", 
     priceHighToLow: "Price: High to Low",
     newestFirst: "Newest First",
+    showItems: "Show",
+    retry: "Retry",
+    noItemsFound: "No items found",
+    noItemsFoundHint: "Try adjusting your filters or check back later for new inventory.",
+    previous: "Previous",
+    next: "Next",
+    paginationSummary: "Page {currentPage} of {totalPages} ({totalItems} total items)",
+    loadingPage: "Loading {page}...",
     
     // Item details
     specifications: "Specifications",
@@ -135,6 +143,7 @@ const translations = {
     specs: "Specs",
     brandsPageTitle: "Explore Our Brands",
     brandsPageSubtitle: "Browse MakMex's stock by top leading brands.",
+    shoppingPageTitle: "Shop MakMex",
     shoppingPageSubtitle: "Browse MakMex's stock of products, kits, and combos.",
     makmexHome: "MakMex Home",
     homeHeroTitle: "Welcome to MakMex",
@@ -236,6 +245,14 @@ const translations = {
     priceLowToHigh: "Precio: Menor a Mayor",
     priceHighToLow: "Precio: Mayor a Menor", 
     newestFirst: "Más Nuevo Primero",
+    showItems: "Mostrar",
+    retry: "Reintentar",
+    noItemsFound: "No se encontraron artículos",
+    noItemsFoundHint: "Intenta ajustar tus filtros o vuelve más tarde para ver nuevo inventario.",
+    previous: "Anterior",
+    next: "Siguiente",
+    paginationSummary: "Página {currentPage} de {totalPages} ({totalItems} artículos en total)",
+    loadingPage: "Cargando {page}...",
     
     // Item details
     specifications: "Especificaciones",
@@ -287,6 +304,7 @@ const translations = {
     specs: "Especificaciones",
     brandsPageTitle: "Explora Nuestras Marcas",
     brandsPageSubtitle: "Explora el inventario de MakMex por marcas líderes.",
+    shoppingPageTitle: "Compra en MakMex",
     shoppingPageSubtitle: "Explora el inventario de MakMex de productos, kits y combos.",
     makmexHome: "Inicio MakMex",
     homeHeroTitle: "Bienvenido a MakMex",
@@ -310,13 +328,19 @@ const translations = {
 };
 
 export function LanguageProvider({ children }) {
-  const [language, setLanguage] = useState('en');
+  const [language, setLanguage] = useState(() => {
+    const savedLanguage = localStorage.getItem('makmex-language');
+    if (savedLanguage && translations[savedLanguage]) {
+      return savedLanguage;
+    }
+    return 'es';
+  });
   
   // Load language preference from localStorage on mount
   useEffect(() => {
     const savedLanguage = localStorage.getItem('makmex-language');
-    if (savedLanguage && translations[savedLanguage]) {
-      setLanguage(savedLanguage);
+    if (!savedLanguage || !translations[savedLanguage]) {
+      localStorage.setItem('makmex-language', 'es');
     }
   }, []);
   
