@@ -345,7 +345,7 @@ export default function ItemDetailsPage() {
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xs font-semibold text-makmex-muted">{item.brand_name}</span>
               {item.condition_name !== "New" && item.condition_name !== "New in Box" && item.condition_name !== "New without a box" && (
-                <span className="rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide bg-yellow-500/20 text-yellow-300">
+                <span className="condition-badge-text rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide bg-yellow-500/20 text-yellow-300">
                   {getEmojiForCondition(item.condition_name)} {translateConditionName(item.condition_name)} ({item.condition_id})
                 </span>
               )}

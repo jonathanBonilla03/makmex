@@ -21,7 +21,8 @@ export default function FilterSidebar({
   availableFilterOptions,
   clearAllFilters,
   showOnlyWithImages,
-  setShowOnlyWithImages
+  setShowOnlyWithImages,
+  compactGridMode = false
 }) {
   const { t, translateConditionName } = useLanguage();
   const [expandedSections, setExpandedSections] = useState(new Set(['brands']));
@@ -57,7 +58,7 @@ export default function FilterSidebar({
           <div className="flex items-center gap-2">
             <span className="text-sm font-bold uppercase tracking-wide text-makmex-muted">{title}</span>
             {selectedCount > 0 && (
-              <span className="bg-makmex-orange text-black text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+              <span className="bg-makmex-orange text-black text-xs font-bold px-1.5 py-0.5 rounded-full min-w-4.5 text-center">
                 {selectedCount}
               </span>
             )}
@@ -91,15 +92,203 @@ export default function FilterSidebar({
             type="checkbox"
             checked={selected.has(typeof item === 'string' ? item : getLabel(item))}
             onChange={() => onChange(typeof item === 'string' ? item : getLabel(item))}
-            className="accent-makmex-orange flex-shrink-0"
+            className="accent-makmex-orange shrink-0"
           />
-          <span className="break-words">
+          <span className="wrap-break-word">
             {typeof item === 'string' ? item : (getDisplayLabel ? getDisplayLabel(item) : getLabel(item))}
           </span>
         </label>
       ))}
     </div>
   );
+
+  if (compactGridMode) {
+    return (
+      <div className="rounded-2xl border border-makmex-border bg-makmex-surface p-3">
+        <div className="grid grid-cols-3 gap-2 text-sm text-makmex-text">
+          {availableFilterOptions.itemTypes?.length > 0 && selectedItemTypes && handleItemTypeChange && (
+            <div className="h-56 rounded-xl border border-makmex-border bg-makmex-panel p-3">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wide text-makmex-muted">{t('items')}</span>
+                {selectedItemTypes.size > 0 && (
+                  <span className="bg-makmex-orange text-black text-xs font-bold px-1.5 py-0.5 rounded-full min-w-4.5 text-center">
+                    {selectedItemTypes.size}
+                  </span>
+                )}
+              </div>
+              <div className="max-h-44 overflow-y-auto pr-1">
+                <CheckboxList
+                  items={availableFilterOptions.itemTypes}
+                  selected={selectedItemTypes}
+                  onChange={handleItemTypeChange}
+                  getLabel={(itemType) => itemType.value}
+                  getDisplayLabel={(itemType) => itemType.label}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="h-56 rounded-xl border border-makmex-border bg-makmex-panel p-3">
+            <div className="mb-2 text-xs font-bold uppercase tracking-wide text-makmex-muted">{t('priceRange')}</div>
+            <div className="space-y-2">
+              <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-1.5">
+                <div>
+                  <label className="mb-1 block text-[10px] font-medium text-makmex-muted">{t('min')}</label>
+                  <input
+                    type="number"
+                    value={priceInputs?.min ?? ""}
+                    onChange={(e) => handlePriceInputChange('min', e.target.value)}
+                    min="0"
+                    className="w-full rounded border border-makmex-border bg-makmex-surface px-1.5 py-1 text-[11px] text-makmex-text"
+                    placeholder="0"
+                  />
+                </div>
+                <span className="pb-1 text-makmex-muted">-</span>
+                <div>
+                  <label className="mb-1 block text-[10px] font-medium text-makmex-muted">{t('max')}</label>
+                  <input
+                    type="number"
+                    value={priceInputs?.max ?? ""}
+                    onChange={(e) => handlePriceInputChange('max', e.target.value)}
+                    min="0"
+                    className="w-full rounded border border-makmex-border bg-makmex-surface px-1.5 py-1 text-[11px] text-makmex-text"
+                    placeholder="10000"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[10px] font-medium text-makmex-muted">{t('min')}: ${priceInputs?.min ?? 0}</label>
+                <input
+                  type="range"
+                  min={priceRange?.min ?? 0}
+                  max={priceRange?.max ?? 10000}
+                  value={priceInputs?.min ?? 0}
+                  onChange={(e) => handlePriceInputChange('min', e.target.value)}
+                  className="slider h-2 w-full cursor-pointer appearance-none rounded-lg bg-makmex-border"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[10px] font-medium text-makmex-muted">{t('max')}: ${priceInputs?.max ?? 0}</label>
+                <input
+                  type="range"
+                  min={priceRange?.min ?? 0}
+                  max={priceRange?.max ?? 10000}
+                  value={priceInputs?.max ?? 0}
+                  onChange={(e) => handlePriceInputChange('max', e.target.value)}
+                  className="slider h-2 w-full cursor-pointer appearance-none rounded-lg bg-makmex-border"
+                />
+              </div>
+
+              <div className="rounded bg-makmex-surface px-2 py-1 text-center text-[11px] text-makmex-muted">
+                ${priceInputs?.min ?? 0} - ${priceInputs?.max ?? 0}
+              </div>
+            </div>
+          </div>
+
+          <div className="h-56 rounded-xl border border-makmex-border bg-makmex-panel p-3">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wide text-makmex-muted">{t('brands')}</span>
+              {selectedBrands.size > 0 && (
+                <span className="bg-makmex-orange text-black text-xs font-bold px-1.5 py-0.5 rounded-full min-w-4.5 text-center">
+                  {selectedBrands.size}
+                </span>
+              )}
+            </div>
+            <div className="max-h-44 overflow-y-auto pr-1">
+              <CheckboxList items={availableFilterOptions.brands} selected={selectedBrands} onChange={handleBrandChange} />
+            </div>
+          </div>
+
+          {availableFilterOptions.conditions?.length > 0 && (
+            <div className="h-56 rounded-xl border border-makmex-border bg-makmex-panel p-3">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wide text-makmex-muted">{t('conditions')}</span>
+                {selectedConditions.size > 0 && (
+                  <span className="bg-makmex-orange text-black text-xs font-bold px-1.5 py-0.5 rounded-full min-w-4.5 text-center">
+                    {selectedConditions.size}
+                  </span>
+                )}
+              </div>
+              <div className="max-h-44 overflow-y-auto pr-1">
+                <CheckboxList
+                  items={availableFilterOptions.conditions}
+                  selected={selectedConditions}
+                  onChange={handleConditionChange}
+                  getLabel={(condition) => condition.general_condition}
+                  getDisplayLabel={(condition) => translateConditionName(condition.general_condition)}
+                />
+              </div>
+            </div>
+          )}
+
+          {availableFilterOptions.powerSources && availableFilterOptions.powerSources.length > 0 && selectedPowerSources && handlePowerSourceChange && (
+            <div className="h-56 rounded-xl border border-makmex-border bg-makmex-panel p-3">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wide text-makmex-muted">{t('powerSources')}</span>
+                {selectedPowerSources.size > 0 && (
+                  <span className="bg-makmex-orange text-black text-xs font-bold px-1.5 py-0.5 rounded-full min-w-4.5 text-center">
+                    {selectedPowerSources.size}
+                  </span>
+                )}
+              </div>
+              <div className="max-h-44 overflow-y-auto pr-1">
+                <CheckboxList
+                  items={availableFilterOptions.powerSources}
+                  selected={selectedPowerSources}
+                  onChange={(item) => {
+                    const value = typeof item === 'string' ? item : item.value || item;
+                    handlePowerSourceChange(value);
+                  }}
+                  getLabel={(powerSource) => typeof powerSource === 'string' ? powerSource : (powerSource.display || powerSource.value || powerSource)}
+                />
+              </div>
+            </div>
+          )}
+
+          {availableFilterOptions.productTypes?.length > 0 && (
+            <div className="h-56 rounded-xl border border-makmex-border bg-makmex-panel p-3">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wide text-makmex-muted">{t('productTypes')}</span>
+                {selectedProductTypes.size > 0 && (
+                  <span className="bg-makmex-orange text-black text-xs font-bold px-1.5 py-0.5 rounded-full min-w-4.5 text-center">
+                    {selectedProductTypes.size}
+                  </span>
+                )}
+              </div>
+              <div className="max-h-44 overflow-y-auto pr-1">
+                <CheckboxList
+                  items={availableFilterOptions.productTypes}
+                  selected={selectedProductTypes}
+                  onChange={handleProductTypeChange}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-makmex-border bg-makmex-panel px-3 py-2">
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={showOnlyWithImages}
+              onChange={(e) => setShowOnlyWithImages(e.target.checked)}
+              className="h-4 w-4 rounded border-makmex-border bg-makmex-bg text-makmex-orange accent-makmex-orange"
+            />
+            <span className="text-xs font-medium text-makmex-text">{t('hasImages')}</span>
+          </label>
+
+          <button
+            onClick={clearAllFilters}
+            className="rounded-lg border border-makmex-border bg-makmex-surface px-2.5 py-1.5 text-xs font-semibold text-makmex-muted hover:border-makmex-orange/60 hover:text-makmex-text"
+          >
+            {t('clearAll')}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-2xl border border-makmex-border bg-makmex-surface p-5 pr-3">
@@ -114,7 +303,7 @@ export default function FilterSidebar({
         <div className="mb-3 flex items-center gap-2">
           <span className="text-sm font-bold uppercase tracking-wide text-makmex-muted">{t('items')}</span>
           {selectedItemTypes.size > 0 && (
-            <span className="bg-makmex-orange text-black text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+            <span className="bg-makmex-orange text-black text-xs font-bold px-1.5 py-0.5 rounded-full min-w-4.5 text-center">
               {selectedItemTypes.size}
             </span>
           )}

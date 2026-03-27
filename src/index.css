@@ -1,6 +1,35 @@
 @import "tailwindcss";
 @config "../tailwind.config.js";
 
+:root,
+[data-theme="light"] {
+  --makmex-bg: 245 247 251;
+  --makmex-surface: 255 255 255;
+  --makmex-panel: 238 242 248;
+  --makmex-border: 216 222 232;
+  --makmex-text: 31 41 55;
+  --makmex-muted: 95 107 122;
+}
+
+[data-theme="dark"] {
+  --makmex-bg: 11 11 13;
+  --makmex-surface: 20 20 24;
+  --makmex-panel: 26 27 32;
+  --makmex-border: 42 44 53;
+  --makmex-text: 244 244 246;
+  --makmex-muted: 183 186 198;
+}
+
+[data-theme="light"] .condition-badge-text {
+  color: #111827 !important;
+  -webkit-text-stroke: 0;
+  text-shadow: none;
+}
+
+[data-theme="light"] .type-badge-accent {
+  color: #111827 !important;
+}
+
 /* Custom Range Slider Styles */
 .slider::-webkit-slider-thumb {
   appearance: none;
@@ -9,7 +38,7 @@
   border-radius: 50%;
   background: #FF6B35; /* makmex-orange */
   cursor: pointer;
-  border: 2px solid #ffffff;
+  border: 2px solid #f8fafc;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
@@ -19,18 +48,18 @@
   border-radius: 50%;
   background: #FF6B35; /* makmex-orange */
   cursor: pointer;
-  border: 2px solid #ffffff;
+  border: 2px solid #f8fafc;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .slider::-webkit-slider-track {
-  background: #3a3a3a; /* makmex-border */
+  background: #d8dee8; /* makmex-border */
   height: 6px;
   border-radius: 3px;
 }
 
 .slider::-moz-range-track {
-  background: #3a3a3a; /* makmex-border */
+  background: #d8dee8; /* makmex-border */
   height: 6px;
   border-radius: 3px;
 }

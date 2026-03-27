@@ -126,10 +126,10 @@ export default function BrandsPage() {
       )}
 
       {loading ? (
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid justify-center gap-4 [grid-template-columns:repeat(auto-fit,220px)] sm:[grid-template-columns:repeat(auto-fit,240px)]">
           {Array.from({ length: 6 }).map((_, index) => (
-            <div key={index} className="rounded-2xl border border-makmex-border bg-makmex-panel p-5">
-              <div className="h-40 animate-pulse rounded-xl border border-dashed border-makmex-border bg-black/20" />
+            <div key={index} className="aspect-square w-[220px] sm:w-[240px] rounded-2xl border border-makmex-border bg-makmex-panel p-5">
+              <div className="h-24 sm:h-28 animate-pulse rounded-xl border border-dashed border-makmex-border bg-black/20" />
               <div className="mt-4 h-4 w-2/3 animate-pulse rounded bg-makmex-border/60" />
               <div className="mt-2 h-3 w-1/3 animate-pulse rounded bg-makmex-border/40" />
               <div className="mt-6 h-10 w-full animate-pulse rounded-xl bg-makmex-border/60" />
@@ -137,35 +137,35 @@ export default function BrandsPage() {
           ))}
         </div>
       ) : (
-        <section className="grid gap-6 md:grid-cols-3">
+        <section className="grid justify-center gap-4 [grid-template-columns:repeat(auto-fit,220px)] sm:[grid-template-columns:repeat(auto-fit,240px)]">
           {brands.map((brand, index) => (
             <article
               key={brand.id}
-              className={`group flex h-full flex-col overflow-hidden rounded-2xl border border-makmex-border bg-makmex-panel p-5 shadow-card transition duration-300 ${
+              className={`group aspect-square w-[220px] sm:w-[240px] flex flex-col overflow-hidden rounded-2xl border border-makmex-border bg-makmex-panel p-4 sm:p-5 shadow-card transition duration-300 ${
                 brand.inStockCount > 0
                   ? 'hover:-translate-y-1 hover:border-makmex-orange/60'
                   : 'opacity-50 saturate-75'
               }`}
             >
-              <div className="relative mb-4 overflow-hidden rounded-xl border border-dashed border-makmex-border bg-black/25 p-4">
+              <div className="relative mb-3 sm:mb-4 overflow-hidden rounded-xl border border-dashed border-makmex-border bg-black/25 p-3 sm:p-4">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/[0.04] to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
-                <div className="flex h-32 items-center justify-center text-center text-xs font-semibold uppercase tracking-wider text-makmex-muted">
+                <div className="flex h-16 sm:h-20 items-center justify-center text-center text-xs font-semibold uppercase tracking-wider text-makmex-muted">
                   {t("brandLogoPlaceholder")}
                 </div>
               </div>
 
               <div className="space-y-1">
-                <h2 className="text-xl font-extrabold text-makmex-text">{brand.name}</h2>
-                <p className="text-sm text-makmex-muted">
+                <h2 className="text-lg sm:text-xl font-extrabold text-makmex-text">{brand.name}</h2>
+                <p className="text-xs sm:text-sm text-makmex-muted">
                   {brand.inStockCount} {brand.inStockCount === 1 ? t("itemInStock") : t("itemsInStock")}
                 </p>
               </div>
 
-              <div className="mt-auto pt-5">
+              <div className="mt-auto pt-3 sm:pt-4">
                 {brand.inStockCount > 0 ? (
                   <Link
                     to={`/shopping?brand=${encodeURIComponent(brand.name)}`}
-                    className="block w-full rounded-xl bg-makmex-orange px-4 py-2.5 text-center text-sm font-semibold text-black transition-colors duration-300 hover:bg-makmex-ember"
+                    className="block w-full rounded-xl bg-makmex-orange px-3 sm:px-4 py-2 sm:py-2.5 text-center text-xs sm:text-sm font-semibold text-black transition-colors duration-300 hover:bg-makmex-ember"
                   >
                     {t("shopWithBrand", { brand: brand.name })}
                   </Link>
@@ -173,7 +173,7 @@ export default function BrandsPage() {
                   <button
                     type="button"
                     disabled
-                    className="block w-full cursor-not-allowed rounded-xl bg-makmex-border px-4 py-2.5 text-center text-sm font-semibold text-makmex-muted"
+                    className="block w-full cursor-not-allowed rounded-xl bg-makmex-border px-3 sm:px-4 py-2 sm:py-2.5 text-center text-xs sm:text-sm font-semibold text-makmex-muted"
                   >
                     {t("outOfStock")}
                   </button>

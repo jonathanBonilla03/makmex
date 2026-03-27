@@ -13,7 +13,7 @@ function Icon({ children }) {
 }
 
 function CartIcon() {
-  const { getCartItemsCount, getCartTotal, items } = useCart();
+  const { getCartItemsCount, getCartTotal } = useCart();
   const { formatPrice, t } = useLanguage();
   const itemsCount = getCartItemsCount();
   const total = getCartTotal();
@@ -154,11 +154,14 @@ export default function StorefrontShell({ children }) {
   const [query, setQuery] = useState("");
   const [isCartSidebarOpen, setIsCartSidebarOpen] = useState(false);
   const [isLocationMenuOpen, setIsLocationMenuOpen] = useState(false);
+  const [theme, setTheme] = useState(() => localStorage.getItem('makmex-theme') || 'light');
   const locationMenuRef = useRef(null);
   const location = useLocation();
   const navigate = useNavigate();
+  const { getCartItemsCount } = useCart();
   const { t, language, toggleLanguage } = useLanguage();
   const { selectedLocations, availableLocations, toggleLocation } = useLocations();
+  const mobileCartCount = getCartItemsCount();
 
   const getLocationShortLabel = (location) => {
     const knownLabels = {
@@ -203,6 +206,11 @@ export default function StorefrontShell({ children }) {
     setQuery(params.get('q') || '');
   }, [location.pathname, location.search]);
 
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('makmex-theme', theme);
+  }, [theme]);
+
   const toggleCartSidebar = () => {
     setIsCartSidebarOpen(!isCartSidebarOpen);
   };
@@ -226,7 +234,7 @@ export default function StorefrontShell({ children }) {
   return (
     <div className="min-h-screen bg-makmex-bg text-makmex-text">
       {/* Top promo bar */}
-      <div className="border-b border-makmex-border bg-black/40">
+      <div className={`border-b border-makmex-border ${theme === 'light' ? 'bg-makmex-panel/95' : 'bg-black/40'}`}>
         <div className="mx-auto max-w-7xl px-4 py-2 text-center text-xs text-makmex-muted">
           WORK IN PROGRESS
         </div>
@@ -278,6 +286,18 @@ export default function StorefrontShell({ children }) {
 
             {/* Actions */}
             <div className="hidden items-center gap-3 md:flex">
+              {/* Theme Toggle */}
+              <button
+                onClick={() => setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))}
+                className="relative flex items-center gap-2 rounded-2xl border border-makmex-border bg-makmex-surface px-3 py-2 hover:border-makmex-orange/60"
+                aria-label={theme === 'light' ? t('switchToDarkMode') : t('switchToLightMode')}
+                  title={theme === 'light' ? t('light') : t('dark')}
+                type="button"
+              >
+                  <span className="text-sm" aria-hidden="true">{theme === 'light' ? '☀️' : '🌙'}</span>
+                  <span className="text-sm font-medium text-makmex-text">{theme === 'light' ? t('light') : t('dark')}</span>
+              </button>
+
               {/* Language Toggle */}
               <button 
                 onClick={toggleLanguage}
@@ -299,7 +319,7 @@ export default function StorefrontShell({ children }) {
         </div>
 
         {/* Row 2: Nav */}
-        <div className="border-t border-makmex-border bg-black/30">
+        <div className={`border-t border-makmex-border ${theme === 'light' ? 'bg-makmex-panel/90' : 'bg-black/30'}`}>
           <nav className="mx-auto flex max-w-7xl items-center gap-1 px-4 py-2 text-sm">
         
 {[
@@ -361,6 +381,44 @@ export default function StorefrontShell({ children }) {
 
       {/* Main content slot */}
       <main className="mx-auto max-w-7xl px-4 py-8">{children}</main>
+      </div>
+
+      {/* Floating mobile quick actions */}
+      <div className="fixed right-3 top-40 z-50 flex flex-col items-center gap-2 md:hidden">
+        <button
+          onClick={toggleCartSidebar}
+          type="button"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-makmex-orange/70 bg-makmex-surface text-lg text-makmex-text shadow-[0_0_0_2px_rgba(0,0,0,0.18)] hover:border-makmex-orange"
+          aria-label={t('cart')}
+          title={t('cart')}
+        >
+          <span className="relative inline-flex items-center justify-center">
+            🛒
+            {mobileCartCount > 0 && (
+              <span className="absolute -right-2 -top-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white">
+                {mobileCartCount > 9 ? '9+' : mobileCartCount}
+              </span>
+            )}
+          </span>
+        </button>
+        <button
+          onClick={() => setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))}
+          type="button"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-makmex-orange/70 bg-makmex-surface text-lg text-makmex-text shadow-[0_0_0_2px_rgba(0,0,0,0.18)] hover:border-makmex-orange"
+          aria-label={theme === 'light' ? t('switchToDarkMode') : t('switchToLightMode')}
+          title={theme === 'light' ? t('light') : t('dark')}
+        >
+          {theme === 'light' ? '☀️' : '🌙'}
+        </button>
+        <button
+          onClick={toggleLanguage}
+          type="button"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-makmex-orange/70 bg-makmex-surface text-sm font-semibold text-makmex-text shadow-[0_0_0_2px_rgba(0,0,0,0.18)] hover:border-makmex-orange"
+          aria-label={language === 'en' ? t('switchToSpanish') : t('switchToEnglish')}
+          title={language === 'en' ? 'ES' : 'EN'}
+        >
+          {language === 'en' ? 'EN' : 'ES'}
+        </button>
       </div>
 
       {/* Cart Sidebar (out of layout flow) */}

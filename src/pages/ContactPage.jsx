@@ -42,7 +42,7 @@ export default function ContactPage() {
       </section>
 
       {loading ? (
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-3">
           {Array.from({ length: 3 }).map((_, index) => (
             <div key={index} className="rounded-2xl border border-makmex-border bg-makmex-panel p-6">
               <div className="h-6 w-1/2 animate-pulse rounded bg-makmex-border/50" />
@@ -55,14 +55,14 @@ export default function ContactPage() {
           ))}
         </div>
       ) : (
-        <section className="grid gap-6 md:grid-cols-3">
+        <section className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-3">
           {locations.map((location, index) => {
             const contact = buildPlaceholderContact(location.name || location.id || "store", index);
 
             return (
-              <article key={location.id || `${location.name}-${index}`} className="rounded-2xl border border-makmex-border bg-makmex-panel p-6 shadow-card">
-                <h2 className="text-2xl font-extrabold text-makmex-text">{location.name || location.id}</h2>
-                <div className="mt-5 space-y-3 text-sm text-makmex-muted">
+              <article key={location.id || `${location.name}-${index}`} className="rounded-2xl border border-makmex-border bg-makmex-panel p-4 sm:p-6 shadow-card">
+                <h2 className="text-xl sm:text-2xl font-extrabold text-makmex-text">{location.name || location.id}</h2>
+                <div className="mt-3 sm:mt-5 space-y-2 sm:space-y-3 text-xs sm:text-sm text-makmex-muted">
                   <p>
                     <span className="font-semibold text-makmex-text">{t("contactAddress")}: </span>
                     {location.address || "Placeholder Address"}

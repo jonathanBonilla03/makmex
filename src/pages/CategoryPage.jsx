@@ -150,7 +150,7 @@ const calculateRelevanceScore = (item, query, tokens) => {
 
 export default function CategoryPage({ title = "Shopping" }) {
   const { t } = useLanguage();
-  const { selectedLocations, toggleLocation, clearLocations, updateAvailableLocations } = useLocations();
+  const { selectedLocations, clearLocations, updateAvailableLocations } = useLocations();
   const [searchParams] = useSearchParams();
 
   // Data state
@@ -439,10 +439,6 @@ export default function CategoryPage({ title = "Shopping" }) {
     });
   };
 
-  const handleLocationChange = (location) => {
-    toggleLocation(location);
-  };
-
   const handleProductTypeChange = (productType) => {
     setSelectedProductTypes((prev) => {
       const next = new Set(prev);
@@ -492,9 +488,29 @@ export default function CategoryPage({ title = "Shopping" }) {
     setCurrentPage(1);
   }, [searchParams]);
 
+  const filterSidebarProps = {
+    priceRange,
+    priceInputs,
+    setPriceInputs,
+    selectedItemTypes,
+    handleItemTypeChange,
+    selectedBrands,
+    handleBrandChange,
+    selectedConditions,
+    handleConditionChange,
+    selectedProductTypes,
+    handleProductTypeChange,
+    selectedPowerSources,
+    handlePowerSourceChange,
+    availableFilterOptions,
+    clearAllFilters,
+    showOnlyWithImages,
+    setShowOnlyWithImages
+  };
+
   return (
     <div className="space-y-6">
-      <section className="relative overflow-hidden rounded-3xl border border-makmex-border bg-gradient-to-br from-makmex-panel via-makmex-bg to-black p-8 md:p-12">
+      <section className="relative overflow-hidden rounded-3xl border border-makmex-border bg-linear-to-br from-makmex-panel via-makmex-bg to-black p-8 md:p-12">
         <div className="absolute -right-16 -top-16 h-72 w-72 rounded-full bg-makmex-orange/15 blur-3xl" />
         <div className="absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl" />
 
@@ -511,25 +527,22 @@ export default function CategoryPage({ title = "Shopping" }) {
 
       {/* Controls row (directly above pagination) */}
       <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-4 lg:pl-3">
-        <p className="text-sm text-makmex-muted">
-          {loading ? `${t('loading')}...` : `${t('Showing') || 'Showing'} ${startIndex + 1}-${Math.min(endIndex, totalItems)} ${t('of') || 'of'} ${totalItems} ${t('results') || 'results'}`}
-        </p>
 
-        <div className="flex items-center gap-4 flex-wrap justify-end">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-makmex-muted">{t('viewMode')}:</span>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 flex-wrap justify-end">
+          <div className="flex items-center gap-2 text-xs sm:text-sm">
+            <span className="text-makmex-muted hidden sm:inline">{t('viewMode')}:</span>
             <div className="inline-flex rounded-lg border border-makmex-border bg-makmex-surface p-1">
               <button
                 type="button"
                 onClick={() => setViewMode('compact')}
-                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${viewMode === 'compact' ? 'bg-makmex-orange text-black' : 'text-makmex-muted hover:text-makmex-text'}`}
+                className={`rounded-md px-2 sm:px-3 py-1 sm:py-1.5 text-xs font-semibold transition ${viewMode === 'compact' ? 'bg-makmex-orange text-black' : 'text-makmex-muted hover:text-makmex-text'}`}
               >
                 {t('compact')}
               </button>
               <button
                 type="button"
                 onClick={() => setViewMode('standard')}
-                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${viewMode === 'standard' ? 'bg-makmex-orange text-black' : 'text-makmex-muted hover:text-makmex-text'}`}
+                className={`rounded-md px-2 sm:px-3 py-1 sm:py-1.5 text-xs font-semibold transition ${viewMode === 'standard' ? 'bg-makmex-orange text-black' : 'text-makmex-muted hover:text-makmex-text'}`}
               >
                 {t('standard')}
               </button>
@@ -537,35 +550,34 @@ export default function CategoryPage({ title = "Shopping" }) {
           </div>
 
           {/* Items per page selector */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-makmex-muted">Show:</span>
+          <div className="flex items-center gap-2 text-xs sm:text-sm">
+            <span className="text-makmex-muted hidden sm:inline">Show:</span>
             <select
               value={itemsPerPage}
               onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
-              className="rounded-lg border border-makmex-border bg-makmex-surface px-3 py-2 text-sm font-semibold text-makmex-text focus:border-makmex-orange focus:outline-none"
+              className="rounded-lg border border-makmex-border bg-makmex-surface px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-makmex-text focus:border-makmex-orange focus:outline-none"
             >
-              <option value={6}>6 per page</option>
-              <option value={12}>12 per page</option>
-              <option value={24}>24 per page</option>
-              <option value={48}>48 per page</option>
+              <option value={12}>12</option>
+              <option value={24}>24</option>
+              <option value={48}>48</option>
             </select>
           </div>
 
           {/* Sort selector */}
-          <div className="relative">
+          <div className="relative text-xs sm:text-sm">
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value)}
               disabled={loading}
-              className="rounded-xl border border-makmex-border bg-makmex-surface px-4 py-2 pr-10 text-sm disabled:opacity-50 appearance-none w-full"
+              className="rounded-xl border border-makmex-border bg-makmex-surface px-2 sm:px-4 py-1.5 sm:py-2 pr-7 sm:pr-10 text-xs sm:text-sm disabled:opacity-50 appearance-none w-auto"
             >
               <option value="relevance">{t('relevance')}</option>
               <option value="price_asc">{t('priceLowToHigh')}</option>
               <option value="price_desc">{t('priceHighToLow')}</option>
               <option value="newest">{t('newestFirst')}</option>
             </select>
-            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-              <svg className="w-4 h-4 text-makmex-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="absolute inset-y-0 right-0 flex items-center pr-2 sm:pr-3 pointer-events-none">
+              <svg className="w-3 h-3 sm:w-4 sm:h-4 text-makmex-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </div>
@@ -613,31 +625,47 @@ export default function CategoryPage({ title = "Shopping" }) {
 
       {/* Main Content */}
       {!loading && !error && (
-        <div className="flex gap-6">
-          <aside className="w-72 flex-shrink-0">
-            <FilterSidebar
-              priceRange={priceRange}
-              priceInputs={priceInputs}
-              setPriceInputs={setPriceInputs}
-              selectedItemTypes={selectedItemTypes}
-              handleItemTypeChange={handleItemTypeChange}
-              selectedBrands={selectedBrands}
-              handleBrandChange={handleBrandChange}
-              selectedConditions={selectedConditions}
-              handleConditionChange={handleConditionChange}
-              selectedProductTypes={selectedProductTypes}
-              handleProductTypeChange={handleProductTypeChange}
-              selectedPowerSources={selectedPowerSources}
-              handlePowerSourceChange={handlePowerSourceChange}
-              availableFilterOptions={availableFilterOptions}
-              clearAllFilters={clearAllFilters}
-              showOnlyWithImages={showOnlyWithImages}
-              setShowOnlyWithImages={setShowOnlyWithImages}
-            />
+        <div className={viewMode === 'standard'
+          ? "flex gap-3 sm:gap-4 lg:gap-6 flex-row"
+          : "flex gap-3 sm:gap-4 lg:gap-6 flex-col lg:flex-row"
+        }>
+          <aside className={viewMode === 'standard'
+            ? "w-1/4 shrink-0"
+            : "w-full lg:w-72 lg:shrink-0"
+          }>
+            {viewMode === 'compact' ? (
+              <>
+                <details className="group rounded-2xl border border-makmex-border bg-makmex-surface lg:hidden" open>
+                  <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-bold uppercase tracking-wide text-makmex-text">
+                    <span>{t('filters')}</span>
+                    <svg
+                      className="h-4 w-4 text-makmex-muted transition-transform group-open:rotate-180"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </summary>
+                  <div className="px-3 pb-3">
+                    <FilterSidebar {...filterSidebarProps} compactGridMode />
+                  </div>
+                </details>
+
+                <div className="hidden lg:block">
+                  <FilterSidebar {...filterSidebarProps} />
+                </div>
+              </>
+            ) : (
+              <FilterSidebar {...filterSidebarProps} />
+            )}
           </aside>
 
           {/* Item Grid */}
-          <div className="flex-1 min-w-0">
+          <div className={viewMode === 'standard'
+            ? "w-3/4 min-w-0"
+            : "flex-1 min-w-0 w-full"
+          }>
             {shownItems.length === 0 ? (
               <div className="rounded-2xl border border-makmex-border bg-makmex-surface p-12 text-center">
                 <h3 className="text-lg font-semibold text-makmex-text">No items found</h3>
@@ -647,7 +675,7 @@ export default function CategoryPage({ title = "Shopping" }) {
               </div>
             ) : (
               <section className={viewMode === 'compact'
-                ? "grid gap-6 [grid-template-columns:repeat(3,280px)]"
+                ? "grid gap-3 sm:gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))] sm:grid-cols-[repeat(3,minmax(180px,1fr))] lg:grid-cols-[repeat(3,280px)]"
                 : "flex flex-col gap-4"
               }>
                 {shownItems.map((item) => (

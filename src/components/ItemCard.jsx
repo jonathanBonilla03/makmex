@@ -38,11 +38,11 @@ function getTranslatedConditionName(conditionName, conditionId, translateConditi
 
 function getTypeBadge(type, t) {
   if (type === 'combo') {
-    return { label: `🎁 ${t('combo')}`, className: 'bg-blue-500/20 text-blue-300' };
+    return { label: `🎁 ${t('combo')}`, className: 'type-badge-accent bg-blue-500/20 text-blue-300' };
   }
 
   if (type === 'kit') {
-    return { label: `🧰 ${t('kit')}`, className: 'bg-purple-500/20 text-purple-300' };
+    return { label: `🧰 ${t('kit')}`, className: 'type-badge-accent bg-purple-500/20 text-purple-300' };
   }
 
   return { label: `🛠️ ${t('product')}`, className: 'bg-makmex-surface text-makmex-muted border border-makmex-border' };
@@ -120,10 +120,10 @@ export default function ItemCard({
   if (layout === 'standard') {
     return (
       <Link to={`/item/${type}/${id}`} className="block">
-        <div className="rounded-2xl border border-makmex-border bg-makmex-panel p-3 shadow-card transition hover:border-makmex-orange/60">
-          <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[11rem_minmax(0,1fr)_20rem] lg:items-stretch">
-            <div className="w-full lg:w-[11rem] flex-shrink-0">
-              <div className="flex h-48 w-full items-center justify-center overflow-hidden rounded-xl border border-makmex-border bg-black/30 text-xs text-makmex-muted">
+        <div className="rounded-2xl border border-makmex-border bg-makmex-panel p-2 sm:p-3 shadow-card transition hover:border-makmex-orange/60">
+          <div className="grid grid-cols-[8rem_minmax(0,1fr)] gap-3 items-stretch lg:grid-cols-[11rem_minmax(0,1fr)_20rem]">
+            <div className="w-32 lg:w-44 shrink-0">
+              <div className="flex h-36 lg:h-48 w-full items-center justify-center overflow-hidden rounded-xl border border-makmex-border bg-black/30 text-xs text-makmex-muted">
                 {displayImageUrl ? (
                   <img
                     src={displayImageUrl}
@@ -156,7 +156,7 @@ export default function ItemCard({
 
               {condition_name && (
                 <div className="mb-2">
-                  <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-bold tracking-wide bg-yellow-500/20 text-yellow-300 whitespace-nowrap">
+                  <span className="condition-badge-text inline-flex rounded-full px-2 py-0.5 text-xs font-bold tracking-wide bg-yellow-500/20 text-yellow-300 whitespace-nowrap">
                     {getEmojiForCondition(condition_name)} {getTranslatedConditionName(condition_name, condition_id, translateConditionName)} {condition_id ? `(${condition_id})` : ''}
                   </span>
                 </div>
@@ -168,7 +168,7 @@ export default function ItemCard({
                   <button
                     disabled={!in_stock || !canAdd}
                     onClick={handleAddToCart}
-                    className={`${actionButtonClass} w-full max-w-[8rem] text-xs py-1.5`}
+                    className={`${actionButtonClass} w-full max-w-32 text-xs py-1.5`}
                   >
                     {buttonLabel}
                   </button>
@@ -185,7 +185,7 @@ export default function ItemCard({
               </div>
             </div>
 
-            <div className="w-full lg:w-[20rem] flex-shrink-0">
+            <div className="hidden lg:block w-[20rem] shrink-0">
               <div className="h-48 w-full rounded-xl border border-makmex-border bg-makmex-surface p-3 text-xs text-makmex-muted overflow-y-auto">
                 {type === 'combo' || type === 'kit' ? (
                   <>
@@ -241,7 +241,7 @@ export default function ItemCard({
 
         {condition_name && (
           <div className="mb-2">
-            <span className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide bg-yellow-500/20 text-yellow-300 whitespace-nowrap">
+            <span className="condition-badge-text inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide bg-yellow-500/20 text-yellow-300 whitespace-nowrap">
               {getEmojiForCondition(condition_name)} {getTranslatedConditionName(condition_name, condition_id, translateConditionName)} {condition_id ? `(${condition_id})` : ''}
             </span>
           </div>
