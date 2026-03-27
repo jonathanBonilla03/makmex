@@ -612,7 +612,7 @@ export default function CategoryPage({ title }) {
       {/* Controls row (directly above pagination) */}
       <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-4 lg:pl-3">
 
-        <div className="flex w-full flex-row flex-wrap items-center justify-start gap-2 sm:gap-4 sm:justify-end">
+        <div className="flex flex-row items-center gap-1.5 overflow-x-auto sm:gap-3 sm:justify-end sm:flex-wrap">
           {isWideViewAvailable && (
             <div className="flex items-center gap-1.5 text-xs sm:gap-2 sm:text-sm">
               <span className="text-makmex-muted hidden sm:inline">{t('viewMode')}:</span>
@@ -636,8 +636,8 @@ export default function CategoryPage({ title }) {
           )}
 
           {/* Items per page selector */}
-          <div className="flex items-center gap-1.5 text-xs sm:gap-2 sm:text-sm">
-            <span className="text-makmex-muted whitespace-nowrap">{t('showItems')}:</span>
+          <div className="flex items-center gap-1 text-xs sm:gap-1.5 sm:text-sm">
+            <span className="text-makmex-muted whitespace-nowrap text-xs sm:text-xs">{t('showItems')}:</span>
             <select
               value={itemsPerPage}
               onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
@@ -650,8 +650,8 @@ export default function CategoryPage({ title }) {
           </div>
 
           {/* Sort selector */}
-          <div className="flex items-center gap-1.5 text-xs sm:gap-2 sm:text-sm">
-            <span className="text-makmex-muted whitespace-nowrap">{t('sortBy')}</span>
+          <div className="flex items-center gap-1 text-xs sm:gap-1.5 sm:text-sm">
+            <span className="text-makmex-muted whitespace-nowrap text-xs sm:text-xs">{t('sortBy')}</span>
             <div className="relative text-xs sm:text-sm">
               <select
                 value={sort}
@@ -862,18 +862,19 @@ function PaginationControls({ currentPage, totalPages, totalItems, onPageChange,
         })}
       </p>
       
-      <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
+      <div className="flex flex-wrap items-center justify-center gap-1 sm:gap-2">
         {/* Previous button */}
         <button
           onClick={onPreviousPage}
           disabled={currentPage === 1}
-          className={`rounded-lg px-2 py-1.5 text-xs font-medium transition sm:px-3 sm:py-2 sm:text-sm ${
+          className={`rounded-lg px-2 py-1.5 text-lg font-medium transition sm:px-3 sm:py-2 sm:text-sm sm:font-medium ${
             currentPage === 1
               ? 'bg-makmex-surface text-makmex-muted cursor-not-allowed border border-makmex-border'
               : 'bg-makmex-panel text-makmex-text hover:bg-makmex-orange hover:text-black border border-makmex-border hover:border-makmex-orange'
           }`}
         >
-          {t('previous')}
+          <span className="sm:hidden">←</span>
+          <span className="hidden sm:inline">{t('previous')}</span>
         </button>
         
         {/* Page numbers */}
@@ -891,7 +892,7 @@ function PaginationControls({ currentPage, totalPages, totalItems, onPageChange,
               <button
                 key={page}
                 onClick={() => onPageChange(page)}
-                className={`rounded-lg px-2 py-1.5 text-xs font-medium transition sm:px-3 sm:py-2 sm:text-sm ${
+                className={`rounded-lg px-2 py-1.5 text-sm font-medium transition sm:px-3 sm:py-2 sm:text-sm ${
                   currentPage === page
                     ? 'bg-makmex-orange text-black border border-makmex-orange'
                     : 'bg-makmex-panel text-makmex-text hover:bg-makmex-orange hover:text-black border border-makmex-border hover:border-makmex-orange'
@@ -907,13 +908,14 @@ function PaginationControls({ currentPage, totalPages, totalItems, onPageChange,
         <button
           onClick={onNextPage}
           disabled={currentPage === totalPages}
-          className={`rounded-lg px-2 py-1.5 text-xs font-medium transition sm:px-3 sm:py-2 sm:text-sm ${
+          className={`rounded-lg px-2 py-1.5 text-lg font-medium transition sm:px-3 sm:py-2 sm:text-sm sm:font-medium ${
             currentPage === totalPages
               ? 'bg-makmex-surface text-makmex-muted cursor-not-allowed border border-makmex-border'
               : 'bg-makmex-panel text-makmex-text hover:bg-makmex-orange hover:text-black border border-makmex-border hover:border-makmex-orange'
           }`}
         >
-          {t('next')}
+          <span className="sm:hidden">→</span>
+          <span className="hidden sm:inline">{t('next')}</span>
         </button>
       </div>
     </div>
