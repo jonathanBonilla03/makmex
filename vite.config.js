@@ -8,6 +8,6 @@ export default defineConfig({
   server: {
     // Add hostnames that are allowed to access the dev server.
     // You can add more hosts to this array if needed.
-    allowedHosts: ["reminder-tobacco-scanned-number.trycloudflare.com"],
+    allowedHosts: ["betting-drugs-exploration-revolution.trycloudflare.com"],
   },
 });
