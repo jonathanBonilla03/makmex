@@ -23,7 +23,7 @@ export default function App() {
               <StorefrontShell>
                 <Routes>
                   <Route path="/" element={<HomePage />} />
-                  <Route path="/shopping" element={<CategoryPage title="Shopping" />} />
+                  <Route path="/shopping" element={<CategoryPage />} />
                   <Route path="/products" element={<Navigate to="/shopping" replace />} />
                   <Route path="/combos" element={<Navigate to="/shopping" replace />} />
                   <Route path="/kits" element={<Navigate to="/shopping" replace />} />

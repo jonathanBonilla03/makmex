@@ -105,7 +105,7 @@ export default function FilterSidebar({
   if (compactGridMode) {
     return (
       <div className="rounded-2xl border border-makmex-border bg-makmex-surface p-3">
-        <div className="grid grid-cols-3 gap-2 text-sm text-makmex-text">
+        <div className="grid grid-cols-2 gap-2 text-sm text-makmex-text sm:grid-cols-3">
           {availableFilterOptions.itemTypes?.length > 0 && selectedItemTypes && handleItemTypeChange && (
             <div className="h-56 rounded-xl border border-makmex-border bg-makmex-panel p-3">
               <div className="mb-2 flex items-center gap-2">
