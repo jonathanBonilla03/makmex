@@ -1,5 +1,5 @@
-import { useMemo, useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useMemo, useState, useEffect, useRef } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import ItemCard from "../components/ItemCard";
 import FilterSidebar from "../components/FilterSidebar";
 import { getProducts, getCombos, getKits, getConditions, getPowerSources } from "../lib/supabase";
@@ -152,6 +152,9 @@ export default function CategoryPage({ title = "Shopping" }) {
   const { t } = useLanguage();
   const { selectedLocations, clearLocations, updateAvailableLocations } = useLocations();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const appliedBrandFromQueryRef = useRef(null);
 
   // Data state
   const [items, setItems] = useState([]);
@@ -391,7 +394,13 @@ export default function CategoryPage({ title = "Shopping" }) {
   const shownItems = filteredItems.slice(startIndex, endIndex);
 
   useEffect(() => {
+    const currentScrollY = window.scrollY;
     setCurrentPage(1);
+
+    // Preserve viewport position after filter-driven re-render.
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: currentScrollY, behavior: 'auto' });
+    });
   }, [selectedItemTypes, selectedBrands, selectedConditions, selectedPowerSources, selectedLocations, selectedProductTypes, showOnlyWithImages, sort, priceInputs, normalizedSearchQuery]);
 
   // Pagination handlers
@@ -481,12 +490,47 @@ export default function CategoryPage({ title = "Shopping" }) {
   }, [availableFilterOptions.locations, updateAvailableLocations]);
 
   useEffect(() => {
-    const brandFromQuery = searchParams.get("brand");
-    if (!brandFromQuery) return;
+    const rawBrandFromQuery = searchParams.get("brand");
+    const brandFromQuery = String(rawBrandFromQuery || "").trim().slice(0, 120);
+
+    if (!brandFromQuery) {
+      appliedBrandFromQueryRef.current = null;
+      return;
+    }
+
+    const knownBrands = new Set(
+      (availableFilterOptions.brands || []).map((brand) => String(brand || "").toLowerCase())
+    );
+
+    // Ignore unexpected brand query values and consume them to keep URL clean.
+    if (!knownBrands.has(brandFromQuery.toLowerCase())) {
+      const unsafeParams = new URLSearchParams(searchParams);
+      unsafeParams.delete("brand");
+      const unsafeQueryString = unsafeParams.toString();
+      navigate(
+        `${location.pathname}${unsafeQueryString ? `?${unsafeQueryString}` : ""}`,
+        { replace: true }
+      );
+      appliedBrandFromQueryRef.current = null;
+      return;
+    }
+
+    // Apply query-driven brand selection only once per unique brand value.
+    if (appliedBrandFromQueryRef.current === brandFromQuery) return;
 
     setSelectedBrands(new Set([brandFromQuery]));
     setCurrentPage(1);
-  }, [searchParams]);
+    appliedBrandFromQueryRef.current = brandFromQuery;
+
+    // Consume brand param once, then remove it from the URL while preserving others.
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("brand");
+    const nextQueryString = nextParams.toString();
+    navigate(
+      `${location.pathname}${nextQueryString ? `?${nextQueryString}` : ""}`,
+      { replace: true }
+    );
+  }, [searchParams, navigate, location.pathname, availableFilterOptions.brands]);
 
   const filterSidebarProps = {
     priceRange,
@@ -635,7 +679,7 @@ export default function CategoryPage({ title = "Shopping" }) {
           }>
             {viewMode === 'compact' ? (
               <>
-                <details className="group rounded-2xl border border-makmex-border bg-makmex-surface lg:hidden" open>
+                <details className="group rounded-2xl border border-makmex-border bg-makmex-surface lg:hidden">
                   <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-bold uppercase tracking-wide text-makmex-text">
                     <span>{t('filters')}</span>
                     <svg
