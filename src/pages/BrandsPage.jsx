@@ -3,6 +3,22 @@ import { Link } from "react-router-dom";
 import { getCombos, getKits, getProducts, supabase } from "../lib/supabase";
 import { useLanguage } from "../context/LanguageContext";
 
+const REQUEST_TIMEOUT_MS = 20000;
+
+const { data: brandsHeroImageData } = supabase.storage
+  .from("web-images")
+  .getPublicUrl("home-page/Tool-Showcase-CloseUp-7.jpg");
+
+const brandsHeroImageUrl = brandsHeroImageData?.publicUrl || "";
+
+const withTimeout = (promise, label) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      window.setTimeout(() => reject(new Error(`${label} request timed out`)), REQUEST_TIMEOUT_MS);
+    })
+  ]);
+
 const getSubItems = (item) => {
   if (item.type === "combo") return item.combo_items || [];
   if (item.type === "kit") return item.kit_items || [];
@@ -34,10 +50,10 @@ export default function BrandsPage() {
 
       try {
         const [brandsResult, productsInStockResult, combosInStockResult, kitsInStockResult] = await Promise.all([
-          supabase.from("brands").select("id, name"),
-          getProducts(),
-          getCombos(),
-          getKits()
+          withTimeout(supabase.from("brands").select("id, name"), "brands"),
+          withTimeout(getProducts(), "products"),
+          withTimeout(getCombos(), "combos"),
+          withTimeout(getKits(), "kits")
         ]);
 
         if (brandsResult.error) throw new Error(brandsResult.error.message);
@@ -95,7 +111,12 @@ export default function BrandsPage() {
 
   return (
     <div className="space-y-10 pb-16">
-      <section className="relative overflow-hidden rounded-3xl border border-makmex-border bg-gradient-to-br from-makmex-panel via-makmex-bg to-black p-8 md:p-12">
+      <section
+        className="relative overflow-hidden rounded-3xl border border-makmex-border bg-cover bg-center bg-no-repeat p-8 md:p-12"
+        style={{
+          backgroundImage: `linear-gradient(120deg, rgba(7, 7, 9, 0.76), rgba(7, 7, 9, 0.56)), url(${brandsHeroImageUrl})`
+        }}
+      >
         <div className="absolute -right-16 -top-16 h-72 w-72 rounded-full bg-makmex-orange/15 blur-3xl float-soft" />
         <div className="absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl float-soft [animation-delay:600ms]" />
 
@@ -103,15 +124,15 @@ export default function BrandsPage() {
           <span className="inline-flex rounded-full border border-makmex-orange/40 bg-makmex-orange/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-makmex-orange">
             {t("brands")}
           </span>
-          <h1 className="text-4xl font-extrabold leading-tight md:text-5xl">{t("brandsPageTitle")}</h1>
-          <p className="text-sm text-makmex-muted md:text-base">{t("brandsPageSubtitle")}</p>
+          <h1 className="text-4xl font-extrabold leading-tight text-white md:text-5xl">{t("brandsPageTitle")}</h1>
+          <p className="text-sm text-slate-200 md:text-base">{t("brandsPageSubtitle")}</p>
 
           {topThree.length > 0 && (
             <div className="flex flex-wrap gap-2 pt-1">
               {topThree.map((brand) => (
                 <span
                   key={brand.id}
-                  className="rounded-full border border-makmex-border bg-makmex-surface px-3 py-1 text-xs font-semibold text-makmex-muted"
+                  className="rounded-full border border-white/30 bg-black/25 px-3 py-1 text-xs font-semibold text-slate-100"
                 >
                   {brand.name} • {brand.inStockCount}
                 </span>
@@ -126,9 +147,9 @@ export default function BrandsPage() {
       )}
 
       {loading ? (
-        <div className="grid justify-center gap-4 [grid-template-columns:repeat(auto-fit,220px)] sm:[grid-template-columns:repeat(auto-fit,240px)]">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
           {Array.from({ length: 6 }).map((_, index) => (
-            <div key={index} className="aspect-square w-[220px] sm:w-[240px] rounded-2xl border border-makmex-border bg-makmex-panel p-5">
+            <div key={index} className="aspect-square w-full rounded-2xl border border-makmex-border bg-makmex-panel p-4 sm:p-5">
               <div className="h-24 sm:h-28 animate-pulse rounded-xl border border-dashed border-makmex-border bg-black/20" />
               <div className="mt-4 h-4 w-2/3 animate-pulse rounded bg-makmex-border/60" />
               <div className="mt-2 h-3 w-1/3 animate-pulse rounded bg-makmex-border/40" />
@@ -137,11 +158,11 @@ export default function BrandsPage() {
           ))}
         </div>
       ) : (
-        <section className="grid justify-center gap-4 [grid-template-columns:repeat(auto-fit,220px)] sm:[grid-template-columns:repeat(auto-fit,240px)]">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
           {brands.map((brand, index) => (
             <article
               key={brand.id}
-              className={`group aspect-square w-[220px] sm:w-[240px] flex flex-col overflow-hidden rounded-2xl border border-makmex-border bg-makmex-panel p-4 sm:p-5 shadow-card transition duration-300 ${
+              className={`group aspect-square w-full flex flex-col overflow-hidden rounded-2xl border border-makmex-border bg-makmex-panel p-4 sm:p-5 shadow-card transition duration-300 ${
                 brand.inStockCount > 0
                   ? 'hover:-translate-y-1 hover:border-makmex-orange/60'
                   : 'opacity-50 saturate-75'

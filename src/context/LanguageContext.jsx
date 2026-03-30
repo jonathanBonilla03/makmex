@@ -37,8 +37,8 @@ const translations = {
     filters: "Filters",
     types: "Types",
     viewMode: "View",
-    compact: "Compact",
-    standard: "Standard",
+    compact: "Default",
+    standard: "Wide",
     clearAll: "Clear All",
     priceRange: "Price Range",
     min: "Min",
@@ -84,6 +84,14 @@ const translations = {
     priceLowToHigh: "Price: Low to High", 
     priceHighToLow: "Price: High to Low",
     newestFirst: "Newest First",
+    showItems: "Show",
+    retry: "Retry",
+    noItemsFound: "No items found",
+    noItemsFoundHint: "Try adjusting your filters or check back later for new inventory.",
+    previous: "Previous",
+    next: "Next",
+    paginationSummary: "Page {currentPage} of {totalPages} ({totalItems} total items)",
+    loadingPage: "Loading {page}...",
     
     // Item details
     specifications: "Specifications",
@@ -135,7 +143,12 @@ const translations = {
     specs: "Specs",
     brandsPageTitle: "Explore Our Brands",
     brandsPageSubtitle: "Browse MakMex's stock by top leading brands.",
+    shoppingPageTitle: "Shop MakMex",
     shoppingPageSubtitle: "Browse MakMex's stock of products, kits, and combos.",
+    makmexHome: "MakMex Home",
+    homeHeroTitle: "Welcome to MakMex",
+    homeHeroSubtitle: "Save on Milwaukee and top tool brands. Clear condition, honest pricing, and value-packed kits and combos.",
+    shopMakmex: "Shop MakMex",
     brandLogoPlaceholder: "Brand logo placeholder",
     itemInStock: "item in stock",
     itemsInStock: "items in stock",
@@ -185,8 +198,8 @@ const translations = {
     filters: "Filtros",
     types: "Tipos",
     viewMode: "Vista",
-    compact: "Compacto",
-    standard: "Estándar",
+    compact: "Defecto",
+    standard: "Ancho",
     clearAll: "Limpiar Todo",
     priceRange: "Rango de Precio",
     min: "Mín",
@@ -203,7 +216,7 @@ const translations = {
     // Condition values
     conditionAA: "Nuevo en Caja",
     conditionA: "Nuevo sin caja",
-    conditionB: "Usado (defectos mínimos)",
+    conditionB: "Semi Nuevo",
     conditionC: "Usado (desgaste moderado)",
     conditionD: "Usado",
     conditionE: "Usado (con detalles notables)",
@@ -232,6 +245,14 @@ const translations = {
     priceLowToHigh: "Precio: Menor a Mayor",
     priceHighToLow: "Precio: Mayor a Menor", 
     newestFirst: "Más Nuevo Primero",
+    showItems: "Mostrar",
+    retry: "Reintentar",
+    noItemsFound: "No se encontraron artículos",
+    noItemsFoundHint: "Intenta ajustar tus filtros o vuelve más tarde para ver nuevo inventario.",
+    previous: "Anterior",
+    next: "Siguiente",
+    paginationSummary: "Página {currentPage} de {totalPages} ({totalItems} artículos en total)",
+    loadingPage: "Cargando {page}...",
     
     // Item details
     specifications: "Especificaciones",
@@ -283,7 +304,12 @@ const translations = {
     specs: "Especificaciones",
     brandsPageTitle: "Explora Nuestras Marcas",
     brandsPageSubtitle: "Explora el inventario de MakMex por marcas líderes.",
+    shoppingPageTitle: "Compra en MakMex",
     shoppingPageSubtitle: "Explora el inventario de MakMex de productos, kits y combos.",
+    makmexHome: "Inicio MakMex",
+    homeHeroTitle: "Bienvenido a MakMex",
+    homeHeroSubtitle: "Ahorra en Milwaukee y las mejores marcas de herramientas. Condición clara, precios honestos y kits y combos con gran valor.",
+    shopMakmex: "Comprar en MakMex",
     brandLogoPlaceholder: "Espacio para logotipo de marca",
     itemInStock: "artículo en stock",
     itemsInStock: "artículos en stock",
@@ -302,13 +328,19 @@ const translations = {
 };
 
 export function LanguageProvider({ children }) {
-  const [language, setLanguage] = useState('en');
+  const [language, setLanguage] = useState(() => {
+    const savedLanguage = localStorage.getItem('makmex-language');
+    if (savedLanguage && translations[savedLanguage]) {
+      return savedLanguage;
+    }
+    return 'es';
+  });
   
   // Load language preference from localStorage on mount
   useEffect(() => {
     const savedLanguage = localStorage.getItem('makmex-language');
-    if (savedLanguage && translations[savedLanguage]) {
-      setLanguage(savedLanguage);
+    if (!savedLanguage || !translations[savedLanguage]) {
+      localStorage.setItem('makmex-language', 'es');
     }
   }, []);
   

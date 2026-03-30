@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getProductById, getComboById, getKitById } from '../lib/supabase';
 import { useCart } from '../context/CartContext';
@@ -226,6 +226,75 @@ export default function ItemDetailsPage() {
     loadItem();
   }, [type, id]);
 
+  const images = useMemo(() => {
+    const nextImages = [];
+
+    if (!item) return nextImages;
+
+    if (type === 'product') {
+      if (item.images && item.images.length > 0) {
+        item.images.forEach((img) => {
+          if (img.public_url) nextImages.push(img.public_url);
+        });
+      } else if (item.image_url) {
+        nextImages.push(item.image_url);
+      }
+    } else if (type === 'combo' || type === 'kit') {
+      if (item.image_url) nextImages.push(item.image_url);
+
+      const itemSubItems = type === 'combo' ? item.combo_items : item.kit_items;
+      if (itemSubItems) {
+        itemSubItems.forEach((subItem) => {
+          if (subItem.products?.images && subItem.products.images.length > 0) {
+            subItem.products.images.forEach((img) => {
+              if (img.public_url) nextImages.push(img.public_url);
+            });
+          } else if (subItem.products?.image_url) {
+            nextImages.push(subItem.products.image_url);
+          }
+        });
+      }
+    }
+
+    return Array.from(new Set(nextImages));
+  }, [item, type]);
+
+  useEffect(() => {
+    if (!images.length) return;
+
+    let isCancelled = false;
+
+    const preloadImages = async () => {
+      await Promise.all(
+        images.map(
+          (src) =>
+            new Promise((resolve) => {
+              const image = new Image();
+              image.src = src;
+
+              if (typeof image.decode === 'function') {
+                image.decode().then(resolve).catch(resolve);
+                return;
+              }
+
+              image.onload = resolve;
+              image.onerror = resolve;
+            })
+        )
+      );
+
+      if (!isCancelled) {
+        // no-op; completion indicates cache warmup for smoother manual cycling
+      }
+    };
+
+    preloadImages();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [images]);
+
   const handleAddToCart = () => {
     if (item && item.in_stock) {
       for (let i = 0; i < quantity; i++) {
@@ -281,38 +350,6 @@ export default function ItemDetailsPage() {
     );
   }
 
-  // Prepare images array
-  const images = [];
-  if (type === 'product') {
-    if (item.images && item.images.length > 0) {
-      item.images.forEach(img => {
-        if (img.public_url) images.push(img.public_url);
-      });
-    } else if (item.image_url) {
-      // Fallback to legacy image_url if no product_images exist
-      images.push(item.image_url);
-    }
-  } else if (type === 'combo' || type === 'kit') {
-    // Add main item image if it exists
-    if (item.image_url) images.push(item.image_url);
-    
-    // Add images from sub-items (combos and kits might have product images too)
-    const subItems = type === 'combo' ? item.combo_items : item.kit_items;
-    if (subItems) {
-      subItems.forEach(subItem => {
-        // First try to use product images from the sub-item's products
-        if (subItem.products?.images && subItem.products.images.length > 0) {
-          subItem.products.images.forEach(img => {
-            if (img.public_url) images.push(img.public_url);
-          });
-        } else if (subItem.products?.image_url) {
-          // Fallback to legacy image_url
-          images.push(subItem.products.image_url);
-        }
-      });
-    }
-  }
-
   // Current sub-item for combos/kits
   const subItems = type === 'combo' ? item.combo_items : (type === 'kit' ? item.kit_items : null);
   const currentSubItem = subItems?.[currentItemIndex];
@@ -349,7 +386,7 @@ export default function ItemDetailsPage() {
                   {getEmojiForCondition(item.condition_name)} {translateConditionName(item.condition_name)} ({item.condition_id})
                 </span>
               )}
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide ${
+              <span className={`type-badge-accent rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide ${
                 type === 'product' ? 'bg-green-500/20 text-green-300' :
                 type === 'combo' ? 'bg-blue-500/20 text-blue-300' : 
                 'bg-purple-500/20 text-purple-300'

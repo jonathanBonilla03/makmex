@@ -45,7 +45,7 @@ function getTypeBadge(type, t) {
     return { label: `🧰 ${t('kit')}`, className: 'type-badge-accent bg-purple-500/20 text-purple-300' };
   }
 
-  return { label: `🛠️ ${t('product')}`, className: 'bg-makmex-surface text-makmex-muted border border-makmex-border' };
+  return { label: `🛠️ ${t('product')}`, className: 'type-badge-accent bg-makmex-surface text-makmex-muted border border-makmex-border' };
 }
 
 export default function ItemCard({
@@ -214,7 +214,7 @@ export default function ItemCard({
 
   return (
     <Link to={`/item/${type}/${id}`} className="block w-full">
-      <div className="rounded-2xl border border-makmex-border bg-makmex-panel p-3 sm:p-5 shadow-card transition hover:border-makmex-orange/60 h-full">
+      <div className="flex h-full flex-col rounded-2xl border border-makmex-border bg-makmex-panel p-3 sm:p-5 shadow-card transition hover:border-makmex-orange/60">
         <div className="mb-3 sm:mb-4 flex h-24 sm:h-36 items-center justify-center rounded-xl bg-black/30 text-xs text-makmex-muted overflow-hidden">
           {displayImageUrl ? (
             <img
@@ -255,32 +255,40 @@ export default function ItemCard({
           {specs && <p className="line-clamp-1" title={specs}>{t('specs')}: {specs}</p>}
           {warehouse_location && <p className="truncate">{t('location')}: {warehouse_location}</p>}
           {item_count > 0 && <p className="truncate">Items: {item_count}</p>}
+        </div>
+
+        <div className="mt-auto pt-2">
           {quantity > 0 && quantity <= 5 && (
-            <p className="text-amber-600">{t('limitedStock', { quantity })}</p>
+            <p className="mb-1 text-[11px] sm:text-xs font-semibold text-amber-600">
+              {t('limitedStock', { quantity })}
+            </p>
           )}
-        </div>
 
-        <div className="mt-3 sm:mt-5 flex flex-col xs:flex-row items-stretch xs:items-center justify-between gap-2">
-          <span className="text-base sm:text-lg font-extrabold">{formatPrice(price)}</span>
+          <div className="mt-3 sm:mt-5 flex flex-col xs:flex-row items-stretch xs:items-center justify-between gap-2">
+            <span className="text-base sm:text-lg font-extrabold">{formatPrice(price)}</span>
 
-          <button
-            disabled={!in_stock || !canAdd}
-            onClick={handleAddToCart}
-            className={actionButtonClass}
-          >
-            {buttonLabel}
-          </button>
-        </div>
+            <button
+              disabled={!in_stock || !canAdd}
+              onClick={handleAddToCart}
+              className={actionButtonClass}
+            >
+              {buttonLabel}
+            </button>
+          </div>
 
-        <div className="mt-2 sm:mt-3 flex items-center gap-2 flex-wrap justify-center">
-          <span className={`inline-block rounded-md px-2 py-1 text-[10px] sm:text-xs font-medium whitespace-nowrap ${badge.className}`}>
-            {badge.label}
-          </span>
-          {product_type_name && (
-            <span className="inline-block rounded-md bg-makmex-surface px-2 py-1 text-[10px] sm:text-xs font-medium text-makmex-muted border border-makmex-border">
-              {product_type_name}
+          <div className="mt-2 sm:mt-3 grid w-full grid-cols-[auto,minmax(0,1fr)] items-center gap-2">
+            <span className={`inline-flex justify-center text-center rounded-md px-2 py-1 text-[10px] sm:text-xs font-medium whitespace-nowrap ${badge.className}`}>
+              {badge.label}
             </span>
-          )}
+            {product_type_name && (
+              <span
+                className="truncate text-center rounded-md border border-makmex-border bg-makmex-surface px-2 py-1 text-[10px] sm:text-xs font-medium text-makmex-muted"
+                title={product_type_name}
+              >
+                {product_type_name}
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </Link>

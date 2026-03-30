@@ -1,4 +1,4 @@
-# MakMex - Power Tools E-commerce Store
+# MakMex - Power Tools E-commerce Store - Vercel
 
 A modern e-commerce web application for power tools built with React, Vite, and Supabase.
 

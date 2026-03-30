@@ -1,49 +1,93 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { supabase } from "../lib/supabase";
+import { useLanguage } from "../context/LanguageContext";
+import { getProducts } from "../lib/supabase";
+
+const REQUEST_TIMEOUT_MS = 20000;
+
+const getSafeImageUrl = (value) => {
+  if (!value) return "";
+
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.toString();
+    }
+  } catch {
+    return "";
+  }
+
+  return "";
+};
+
+const { data: homeHeroImageData } = supabase.storage
+  .from("web-images")
+  .getPublicUrl("home-page/Shelf-Showcase_Wide-MakMex.jpg");
+
+const homeHeroImageUrl = getSafeImageUrl(homeHeroImageData?.publicUrl || "");
+
+const withTimeout = (promise, label) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      window.setTimeout(() => reject(new Error(`${label} request timed out`)), REQUEST_TIMEOUT_MS);
+    })
+  ]);
+
+const sectionImagePaths = {
+  "01": "home-page/Tool-Showcase-CloseUp-5.jpg",
+  "02": "home-page/Tool-Showcase-CloseUp-1.jpg",
+  "03": "home-page/Store-Showcase-MakMex.jpg",
+  "04": "home-page/Shelf-Showcase_MakMex.jpg"
+};
+
+const sectionImageUrls = Object.fromEntries(
+  Object.entries(sectionImagePaths).map(([id, path]) => {
+    const { data } = supabase.storage.from("web-images").getPublicUrl(path);
+    return [id, getSafeImageUrl(data?.publicUrl || "")];
+  })
+);
+
+const NEWEST_MAX_ITEMS = 15;
 
 const showcaseSections = [
   {
     id: "01",
-    title: "Hero Campaign",
-    subtitle: "Placeholder headline for flagship promotion",
-    body: "Use this space for your strongest value proposition, launch message, and visual storytelling block.",
+    title: "Shop Everything Milwaukee",
+    subtitle: "From daily drivers to hard-to-find essentials",
+    body: "Browse a deep lineup of tools, batteries, and accessories sourced for real jobs and real budgets.",
     accent: "from-makmex-orange/30 via-makmex-orange/5 to-transparent"
   },
   {
     id: "02",
-    title: "Feature Story",
-    subtitle: "Placeholder narrative section",
-    body: "Highlight trust signals, differentiators, and an image-first layout that supports brand perception.",
+    title: "Transparent Conditions",
+    subtitle: "Know exactly what you are buying",
+    body: "Every listing includes clear condition grading so you can compare value fast and shop with confidence.",
     accent: "from-blue-500/20 via-blue-500/5 to-transparent"
   },
   {
     id: "03",
-    title: "Category Spotlight",
-    subtitle: "Placeholder section for category cards",
-    body: "Swap these placeholders with product family visuals, short copy, and links to curated collections.",
+    title: "Multiple Locations",
+    subtitle: "Inventory where you need it",
+    body: "Check stock by location and choose pickup or shipping options that match your timeline.",
     accent: "from-purple-500/20 via-purple-500/5 to-transparent"
   },
   {
     id: "04",
-    title: "Final CTA",
-    subtitle: "Placeholder closing section",
-    body: "Use this final panel as a conversion push with urgency, social proof, or a seasonal campaign.",
+    title: "Shop Your Way",
+    subtitle: "Products, kits, and combos in one place",
+    body: "Filter fast, compare quickly, and build the setup that fits your work style and budget.",
     accent: "from-emerald-500/20 via-emerald-500/5 to-transparent"
   }
 ];
 
-function PlaceholderMedia({ label }) {
-  return (
-    <div className="group relative overflow-hidden rounded-2xl border border-makmex-border bg-makmex-panel p-4 shadow-card">
-      <div className="absolute inset-0 bg-gradient-to-br from-white/[0.04] to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
-      <div className="flex h-52 items-center justify-center rounded-xl border border-dashed border-makmex-border bg-black/25 text-sm font-semibold text-makmex-muted transition-colors duration-500 group-hover:border-makmex-orange/60 group-hover:text-makmex-text">
-        {label}
-      </div>
-    </div>
-  );
-}
-
 export default function HomePage() {
+  const { t } = useLanguage();
+  const [newestProducts, setNewestProducts] = useState([]);
+  const [newestPageIndex, setNewestPageIndex] = useState(0);
+  const [featuredItemsPerPage, setFeaturedItemsPerPage] = useState(5);
+
   useEffect(() => {
     const nodes = document.querySelectorAll("[data-reveal]");
     const observer = new IntersectionObserver(
@@ -61,49 +105,204 @@ export default function HomePage() {
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    async function loadNewestProducts() {
+      let result;
+
+      try {
+        result = await withTimeout(getProducts(), "featured products");
+      } catch (err) {
+        console.error("Featured products load error:", err);
+        setNewestProducts([]);
+        return;
+      }
+
+      if (!result.success || !result.data) {
+        setNewestProducts([]);
+        return;
+      }
+
+      const topStockedWithImages = result.data
+        .map((product) => ({
+          id: product.id,
+          type: "product",
+          name: product.description || product.name || "Product",
+          quantity: product.quantity || 0,
+          imageUrl: getSafeImageUrl(product.primary_image?.public_url || product.image_url)
+        }))
+        .filter((product) => Boolean(product.imageUrl))
+        .sort((a, b) => (b.quantity || 0) - (a.quantity || 0))
+        .slice(0, NEWEST_MAX_ITEMS);
+
+      setNewestProducts(topStockedWithImages);
+      setNewestPageIndex(0);
+    }
+
+    loadNewestProducts();
+  }, []);
+
+  useEffect(() => {
+    const updateFeaturedItemsPerPage = () => {
+      const width = window.innerWidth;
+      if (width < 640) {
+        setFeaturedItemsPerPage(2);
+        return;
+      }
+
+      if (width < 1024) {
+        setFeaturedItemsPerPage(3);
+        return;
+      }
+
+      setFeaturedItemsPerPage(5);
+    };
+
+    updateFeaturedItemsPerPage();
+    window.addEventListener("resize", updateFeaturedItemsPerPage);
+
+    return () => window.removeEventListener("resize", updateFeaturedItemsPerPage);
+  }, []);
+
+  const newestProductPages = useMemo(() => {
+    if (newestProducts.length === 0) return [];
+    const pages = [];
+
+    for (let i = 0; i < newestProducts.length; i += featuredItemsPerPage) {
+      pages.push(newestProducts.slice(i, i + featuredItemsPerPage));
+    }
+
+    return pages;
+  }, [newestProducts, featuredItemsPerPage]);
+
+  const newestTotalPages = newestProductPages.length;
+  const safeNewestPageIndex = newestTotalPages === 0
+    ? 0
+    : Math.min(newestPageIndex, newestTotalPages - 1);
+
+  useEffect(() => {
+    if (newestTotalPages <= 1) return undefined;
+
+    const intervalId = window.setInterval(() => {
+      setNewestPageIndex((prev) => (prev + 1) % newestTotalPages);
+    }, 15000);
+
+    return () => window.clearInterval(intervalId);
+  }, [newestTotalPages]);
+
+  const goToPreviousNewestPage = () => {
+    if (newestTotalPages <= 1) return;
+    setNewestPageIndex((prev) => (prev - 1 + newestTotalPages) % newestTotalPages);
+  };
+
+  const goToNextNewestPage = () => {
+    if (newestTotalPages <= 1) return;
+    setNewestPageIndex((prev) => (prev + 1) % newestTotalPages);
+  };
+
+  const currentNewestPage = newestProductPages[safeNewestPageIndex] || [];
+
   return (
     <div className="space-y-16 pb-20">
       <section
         data-reveal
-        className="reveal-block relative overflow-hidden rounded-3xl border border-makmex-border bg-gradient-to-br from-makmex-panel via-makmex-bg to-black p-8 md:p-12"
+        className="reveal-block relative overflow-hidden rounded-3xl border border-makmex-border bg-cover bg-center bg-no-repeat p-8 md:p-12"
+        style={{
+          backgroundImage: `linear-gradient(120deg, rgba(7, 7, 9, 0.74), rgba(7, 7, 9, 0.52)), url(${homeHeroImageUrl})`
+        }}
       >
         <div className="absolute -right-16 -top-16 h-72 w-72 rounded-full bg-makmex-orange/15 blur-3xl float-soft" />
         <div className="absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl float-soft [animation-delay:600ms]" />
 
         <div className="relative z-10 max-w-3xl space-y-6">
-          <span className="inline-flex rounded-full border border-makmex-orange/40 bg-makmex-orange/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-makmex-orange">
-            MAKMEX Home Skeleton
+          <span className="inline-flex rounded-full border border-makmex-orange/40 bg-makmex-orange/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-white">
+            {t("makmexHome")}
           </span>
-          <h1 className="text-4xl font-extrabold leading-tight md:text-6xl">
-            Animated Homepage Structure
+          <h1 className="text-4xl font-extrabold leading-tight text-white md:text-6xl">
+            {t("homeHeroTitle")}
           </h1>
-          <p className="max-w-2xl text-base text-makmex-muted md:text-lg">
-            This is a presentation-first layout foundation with cinematic section transitions, placeholder media zones,
-            and conversion-oriented flow ready for final copy and assets.
+          <p className="max-w-2xl text-base text-slate-200 md:text-lg">
+            {t("homeHeroSubtitle")}
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <Link
               to="/shopping"
               className="rounded-xl bg-makmex-orange px-5 py-3 text-sm font-semibold text-black transition-transform duration-300 hover:-translate-y-0.5 hover:bg-makmex-ember"
             >
-              Enter Shopping
+              {t("shopMakmex")}
             </Link>
-            <button
-              type="button"
-              className="rounded-xl border border-makmex-border bg-makmex-surface px-5 py-3 text-sm font-semibold text-makmex-text transition-colors duration-300 hover:border-makmex-orange/60"
+            <Link
+              to="/brands"
+              className="rounded-xl border border-makmex-border bg-makmex-surface px-5 py-3 text-sm font-semibold text-makmex-text transition-colors duration-300 hover:border-makmex-orange/60 hover:text-makmex-orange"
             >
-              Placeholder Secondary Action
-            </button>
+              {t("brandsPageTitle")}
+            </Link>
+            <Link
+              to="/contact"
+              className="rounded-xl border border-makmex-border bg-makmex-surface px-5 py-3 text-sm font-semibold text-makmex-text transition-colors duration-300 hover:border-makmex-orange/60 hover:text-makmex-orange"
+            >
+              {t("contact")}
+            </Link>
           </div>
         </div>
       </section>
 
-      <section className="grid gap-6 md:grid-cols-3">
-        {["Placeholder Hero Image", "Placeholder Product Collage", "Placeholder Metrics Panel"].map((label, index) => (
-          <div key={label} data-reveal className="reveal-block" style={{ transitionDelay: `${index * 120}ms` }}>
-            <PlaceholderMedia label={label} />
+      <section data-reveal className="reveal-block relative rounded-3xl border border-makmex-border bg-makmex-panel p-5 md:p-6">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-xl font-extrabold md:text-2xl">Featured Products</h2>
+          <div className="text-xs text-makmex-muted">
+            {newestTotalPages > 0 ? `${safeNewestPageIndex + 1} / ${newestTotalPages}` : "0 / 0"}
           </div>
-        ))}
+        </div>
+
+        <div className="relative">
+          <button
+            type="button"
+            onClick={goToPreviousNewestPage}
+            disabled={newestTotalPages <= 1}
+            className="absolute left-0 top-0 bottom-0 z-10 flex w-10 md:w-11 items-center justify-center rounded-l-2xl border border-makmex-border bg-makmex-surface/95 text-xl text-makmex-text shadow-card transition hover:border-makmex-orange/60 disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Previous featured products"
+          >
+            ←
+          </button>
+
+          <div className="px-12">
+            <div
+              className="grid gap-3"
+              style={{ gridTemplateColumns: `repeat(${featuredItemsPerPage}, minmax(0, 1fr))` }}
+            >
+              {currentNewestPage.map((product) => (
+                <Link
+                  key={product.id}
+                  to={`/item/${product.type}/${product.id}`}
+                  className="group relative block overflow-hidden rounded-2xl border border-makmex-border bg-black/20 aspect-square"
+                >
+                  <img
+                    src={product.imageUrl}
+                    alt={product.name}
+                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/70 to-transparent p-2">
+                    <p className="line-clamp-2 text-[11px] font-semibold leading-tight text-white md:text-xs" title={product.name}>
+                      {product.name}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={goToNextNewestPage}
+            disabled={newestTotalPages <= 1}
+            className="absolute right-0 top-0 bottom-0 z-10 flex w-10 md:w-11 items-center justify-center rounded-r-2xl border border-makmex-border bg-makmex-surface/95 text-xl text-makmex-text shadow-card transition hover:border-makmex-orange/60 disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Next featured products"
+          >
+            →
+          </button>
+        </div>
       </section>
 
       <section className="space-y-8">
@@ -117,23 +316,22 @@ export default function HomePage() {
             <div className={`absolute inset-0 bg-gradient-to-r ${section.accent}`} />
             <div className="relative z-10 grid gap-6 lg:grid-cols-[1fr_26rem] lg:items-center">
               <div className="space-y-4">
-                <span className="text-xs font-bold uppercase tracking-[0.25em] text-makmex-muted">Section {section.id}</span>
                 <h2 className="text-2xl font-extrabold md:text-3xl">{section.title}</h2>
                 <p className="text-sm font-semibold text-makmex-text md:text-base">{section.subtitle}</p>
                 <p className="max-w-2xl text-sm text-makmex-muted md:text-base">{section.body}</p>
               </div>
-              <PlaceholderMedia label={`Placeholder Visual ${section.id}`} />
+              <div className="overflow-hidden rounded-2xl border border-makmex-border bg-makmex-surface/70">
+                <img
+                  src={sectionImageUrls[section.id]}
+                  alt={section.title}
+                  className="h-52 w-full object-cover md:h-64"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
             </div>
           </article>
         ))}
-      </section>
-
-      <section data-reveal className="reveal-block rounded-3xl border border-makmex-border bg-makmex-surface/70 p-8 text-center md:p-12">
-        <h3 className="text-2xl font-extrabold md:text-3xl">Final Presentation Block</h3>
-        <p className="mx-auto mt-3 max-w-3xl text-sm text-makmex-muted md:text-base">
-          Replace this block with social proof, customer logos, FAQs, or campaign-specific conversion components.
-          All transitions are already wired and ready for real content.
-        </p>
       </section>
     </div>
   );

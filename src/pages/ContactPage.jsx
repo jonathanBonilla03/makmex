@@ -2,6 +2,22 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useLanguage } from "../context/LanguageContext";
 
+const REQUEST_TIMEOUT_MS = 20000;
+
+const { data: contactHeroImageData } = supabase.storage
+  .from("web-images")
+  .getPublicUrl("home-page/Tool-Showcase-CloseUp-2.jpg");
+
+const contactHeroImageUrl = contactHeroImageData?.publicUrl || "";
+
+const withTimeout = (promise, label) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      window.setTimeout(() => reject(new Error(`${label} request timed out`)), REQUEST_TIMEOUT_MS);
+    })
+  ]);
+
 function buildPlaceholderContact(locationName, index) {
   const numberSuffix = String(index + 1).padStart(2, "0");
   return {
@@ -14,21 +30,37 @@ export default function ContactPage() {
   const { t } = useLanguage();
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     async function loadLocations() {
       setLoading(true);
-      const { data } = await supabase.from("warehouse").select("id, name, address").order("name", { ascending: true });
+      setError(null);
 
-      const fallbackLocations = [
-        { id: "CDMX", name: "Mexico City", address: "Placeholder Address 101, Mexico City" },
-        { id: "GDL", name: "Guadalajara", address: "Placeholder Address 202, Guadalajara" },
-        { id: "MTY", name: "Monterrey", address: "Placeholder Address 303, Monterrey" }
-      ];
+      try {
+        const { data, error: warehouseError } = await withTimeout(
+          supabase.from("warehouse").select("id, name, address").order("name", { ascending: true }),
+          "warehouse"
+        );
 
-      const source = data && data.length > 0 ? data : fallbackLocations;
-      setLocations(source.slice(0, 3));
-      setLoading(false);
+        if (warehouseError) {
+          throw new Error(warehouseError.message);
+        }
+
+        const fallbackLocations = [
+          { id: "CDMX", name: "Mexico City", address: "Placeholder Address 101, Mexico City" },
+          { id: "GDL", name: "Guadalajara", address: "Placeholder Address 202, Guadalajara" },
+          { id: "MTY", name: "Monterrey", address: "Placeholder Address 303, Monterrey" }
+        ];
+
+        const source = data && data.length > 0 ? data : fallbackLocations;
+        setLocations(source.slice(0, 3));
+      } catch (err) {
+        setError(err.message || "Failed to load contact locations");
+        setLocations([]);
+      } finally {
+        setLoading(false);
+      }
     }
 
     loadLocations();
@@ -36,13 +68,22 @@ export default function ContactPage() {
 
   return (
     <div className="space-y-8 pb-12">
-      <section className="rounded-3xl border border-makmex-border bg-gradient-to-br from-makmex-panel via-makmex-bg to-black p-8 md:p-10">
-        <h1 className="text-4xl font-extrabold md:text-5xl">{t("contactPageTitle")}</h1>
-        <p className="mt-3 max-w-3xl text-sm text-makmex-muted md:text-base">{t("contactPageSubtitle")}</p>
+      <section
+        className="relative overflow-hidden rounded-3xl border border-makmex-border bg-cover bg-center bg-no-repeat p-8 md:p-12"
+        style={{
+          backgroundImage: `linear-gradient(120deg, rgba(7, 7, 9, 0.76), rgba(7, 7, 9, 0.56)), url(${contactHeroImageUrl})`
+        }}
+      >
+        <h1 className="text-4xl font-extrabold text-white md:text-5xl">{t("contactPageTitle")}</h1>
+        <p className="mt-3 max-w-3xl text-sm text-slate-200 md:text-base">{t("contactPageSubtitle")}</p>
       </section>
 
+      {error && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+      )}
+
       {loading ? (
-        <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-3">
+        <div className="grid gap-4 grid-cols-1 sm:gap-6 md:grid-cols-3">
           {Array.from({ length: 3 }).map((_, index) => (
             <div key={index} className="rounded-2xl border border-makmex-border bg-makmex-panel p-6">
               <div className="h-6 w-1/2 animate-pulse rounded bg-makmex-border/50" />
@@ -55,14 +96,17 @@ export default function ContactPage() {
           ))}
         </div>
       ) : (
-        <section className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-3">
+        <section className="grid gap-4 grid-cols-1 sm:gap-6 md:grid-cols-3">
           {locations.map((location, index) => {
             const contact = buildPlaceholderContact(location.name || location.id || "store", index);
 
             return (
-              <article key={location.id || `${location.name}-${index}`} className="rounded-2xl border border-makmex-border bg-makmex-panel p-4 sm:p-6 shadow-card">
-                <h2 className="text-xl sm:text-2xl font-extrabold text-makmex-text">{location.name || location.id}</h2>
-                <div className="mt-3 sm:mt-5 space-y-2 sm:space-y-3 text-xs sm:text-sm text-makmex-muted">
+              <article
+                key={location.id || `${location.name}-${index}`}
+                className="rounded-2xl border border-makmex-border bg-makmex-panel p-4 shadow-card sm:p-6"
+              >
+                <h2 className="text-xl font-extrabold text-makmex-text sm:text-2xl">{location.name || location.id}</h2>
+                <div className="mt-3 space-y-2 text-xs text-makmex-muted sm:mt-5 sm:space-y-3 sm:text-sm">
                   <p>
                     <span className="font-semibold text-makmex-text">{t("contactAddress")}: </span>
                     {location.address || "Placeholder Address"}

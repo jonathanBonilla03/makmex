@@ -3,6 +3,13 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useLocations } from "../context/LocationContext";
+import { supabase } from "../lib/supabase";
+
+const { data: homeLogoImageData } = supabase.storage
+  .from("web-images")
+  .getPublicUrl("home-page/MakMex_Logo.png");
+
+const homeLogoImageUrl = homeLogoImageData?.publicUrl || "";
 
 function Icon({ children }) {
   return (
@@ -154,7 +161,13 @@ export default function StorefrontShell({ children }) {
   const [query, setQuery] = useState("");
   const [isCartSidebarOpen, setIsCartSidebarOpen] = useState(false);
   const [isLocationMenuOpen, setIsLocationMenuOpen] = useState(false);
-  const [theme, setTheme] = useState(() => localStorage.getItem('makmex-theme') || 'light');
+  const [theme, setTheme] = useState(() => {
+    const savedTheme = localStorage.getItem('makmex-theme');
+    if (savedTheme === 'light' || savedTheme === 'dark') {
+      return savedTheme;
+    }
+    return 'dark';
+  });
   const locationMenuRef = useRef(null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -215,6 +228,22 @@ export default function StorefrontShell({ children }) {
     setIsCartSidebarOpen(!isCartSidebarOpen);
   };
 
+  const handleSearchChange = (e) => {
+    const newValue = e.target.value;
+    setQuery(newValue);
+    
+    // Auto-clear search when input is emptied and there's currently a query
+    if (newValue.trim() === '') {
+      const params = new URLSearchParams(location.search);
+      if (params.get('q')) {
+        // Automatically submit to clear the search
+        params.delete('q');
+        const queryString = params.toString();
+        navigate(`/shopping${queryString ? `?${queryString}` : ''}`);
+      }
+    }
+  };
+
   const handleSearchSubmit = () => {
     const trimmedQuery = query.trim();
     const params = location.pathname === '/shopping'
@@ -251,9 +280,15 @@ export default function StorefrontShell({ children }) {
             <div className="flex items-center gap-2">
               <Link
                 to="/"
-                className="rounded-xl bg-makmex-orange px-3 py-2 font-extrabold tracking-tight text-black hover:bg-makmex-ember transition-colors"
+                className="inline-flex h-10 items-center justify-center rounded-xl bg-makmex-orange px-2 transition-colors hover:bg-makmex-ember"
               >
-                MAKMEX
+                <img
+                  src={homeLogoImageUrl}
+                  alt="MakMex"
+                  className="h-7 w-auto object-contain"
+                  loading="lazy"
+                  decoding="async"
+                />
               </Link>
               <div className="hidden text-sm font-semibold text-makmex-muted sm:block">
                 Store
@@ -271,7 +306,7 @@ export default function StorefrontShell({ children }) {
               >
                 <input
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                   onChange={handleSearchChange}
                   placeholder={t('searchPlaceholder') || "Search tools, batteries, kits…"}
                   className="w-full bg-transparent px-4 py-3 text-sm outline-none placeholder:text-makmex-muted/70"
                 />
