@@ -30,29 +30,29 @@ export default function OrderSuccessPage() {
 
           {/* Success Message */}
           <h1 className="text-3xl font-extrabold text-makmex-text mb-4">
-            Thank You for Your Order!
+            {t('orderSuccessTitle')}
           </h1>
           
           <p className="text-lg text-makmex-muted mb-8">
-            Your order has been successfully placed. A Makmex representative will contact you within 24 hours to confirm the details and arrange delivery.
+            {t('orderSuccessMessage')}
           </p>
 
           {/* Important Information */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8">
-            <h3 className="font-semibold text-blue-900 mb-2">What happens next?</h3>
+            <h3 className="font-semibold text-blue-900 mb-2">{t('whatHappensNext')}</h3>
             <ul className="text-sm text-blue-800 text-left space-y-1">
-              <li>• You'll receive an email confirmation shortly</li>
-              <li>• Our team will review your order within 24 hours</li>
-              <li>• A representative will contact you to confirm details</li>
-              <li>• Delivery arrangements will be made after confirmation</li>
+              <li>• {t('emailConfirmationShortly')}</li>
+              <li>• {t('teamReviewOrder')}</li>
+              <li>• {t('representativeContactDetails')}</li>
+              <li>• {t('deliveryArrangements')}</li>
             </ul>
           </div>
 
           {/* Contact Information */}
           <div className="bg-makmex-surface border border-makmex-border rounded-lg p-4 mb-8">
-            <h3 className="font-semibold text-makmex-text mb-2">Questions?</h3>
+            <h3 className="font-semibold text-makmex-text mb-2">{t('questions')}</h3>
             <p className="text-sm text-makmex-muted">
-              If you have any questions about your order, please contact us at:
+              {t('questionsAboutOrder')}
             </p>
             <a 
               href="mailto:test@gmail.com" 
@@ -68,13 +68,13 @@ export default function OrderSuccessPage() {
               onClick={() => navigate('/')}
               className="w-full bg-makmex-orange text-black font-semibold py-3 rounded-lg hover:bg-makmex-ember transition-colors"
             >
-              Continue Shopping
+              {t('continueShopping')}
             </button>
           </div>
 
           {/* Order Limit Reminder */}
           <p className="text-xs text-makmex-muted mt-6">
-            Remember: For security reasons, customers are limited to one order per day.
+            {t('orderLimitReminder')}
           </p>
         </div>
       </div>

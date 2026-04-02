@@ -5,7 +5,7 @@ import { useCart } from "../context/CartContext";
 import { addCustomer, checkExistingCustomer, createOrder, checkRecentOrders, checkDuplicateOrder } from "../lib/supabase";
 
 export default function CheckoutPage() {
-  const { t } = useLanguage();
+  const { t, formatPrice } = useLanguage();
   const { items, getCartTotal, clearCart } = useCart();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -21,7 +21,7 @@ export default function CheckoutPage() {
 
     // Validate required fields
     if (!formData.name || !formData.email) {
-      alert('Please fill in all required fields');
+      alert(t('pleaseFillRequiredFields'));
       setIsSubmitting(false);
       return;
     }
@@ -29,7 +29,7 @@ export default function CheckoutPage() {
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
-      alert('Please enter a valid email address');
+      alert(t('pleaseEnterValidEmail'));
       setIsSubmitting(false);
       return;
     }
@@ -53,7 +53,7 @@ export default function CheckoutPage() {
       // If customer exists, use their existing record
       if (existingCustomerResult.data && existingCustomerResult.data.length > 0) {
         customer = existingCustomerResult.data[0];
-        alert(`Welcome back, ${customer.name}! We found your existing account.`);
+        alert(`${t('welcomeBack')} ${customer.name}! ${t('foundExistingAccount')}`);
       } else {
         // Create new customer if they don't exist
         const customerResult = await addCustomer(customerData);
@@ -68,26 +68,26 @@ export default function CheckoutPage() {
       // Check for recent orders (spam protection - 1 order per day)
       const recentOrderCheck = await checkRecentOrders(customer.id);
       if (!recentOrderCheck.success) {
-        alert(`Error checking order history: ${recentOrderCheck.error}`);
+        alert(`${t('errorCheckingOrderHistory')}: ${recentOrderCheck.error}`);
         return;
       }
 
       if (recentOrderCheck.hasRecentOrder) {
         const orderTime = new Date(recentOrderCheck.recentOrderTime).toLocaleString();
-        alert(`You have already placed an order on ${orderTime}. For security reasons, you can only place one order per day. Please try again tomorrow.`);
+        alert(`${t('alreadyPlacedOrder')} ${orderTime}. ${t('oneOrderPerDay')}`);
         return;
       }
 
       // Check for duplicate order (same items, same total within last hour)
       const duplicateCheck = await checkDuplicateOrder(customer.id, items, getCartTotal());
       if (!duplicateCheck.success) {
-        alert(`Error checking for duplicate orders: ${duplicateCheck.error}`);
+        alert(`${t('errorCheckingDuplicates')}: ${duplicateCheck.error}`);
         return;
       }
 
       if (duplicateCheck.isDuplicate) {
         const orderTime = new Date(duplicateCheck.recentOrderTime).toLocaleString();
-        alert(`It appears you already placed this same order at ${orderTime}. Please check your email for order confirmation or contact us if you need assistance.`);
+        alert(`${t('duplicateOrder')} ${orderTime}. ${t('checkEmailOrContact')}`);
         return;
       }
 
@@ -112,10 +112,10 @@ export default function CheckoutPage() {
         // Redirect to success page
         navigate('/order-success');
       } else {
-        alert(`Error creating order: ${orderResult.error}`);
+        alert(`${t('errorCreatingOrder')}: ${orderResult.error}`);
       }
     } catch (error) {
-      alert(`Unexpected error: ${error.message}`);
+      alert(`${t('unexpectedError')}: ${error.message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -123,15 +123,15 @@ export default function CheckoutPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-extrabold tracking-tight">Checkout</h1>
+      <h1 className="text-2xl font-extrabold tracking-tight">{t('checkout')}</h1>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Order Summary */}
         <div className="space-y-6">
-          <h2 className="text-xl font-semibold text-makmex-text">Order Summary</h2>
+          <h2 className="text-xl font-semibold text-makmex-text">{t('orderSummary')}</h2>
           
           {items.length === 0 ? (
-            <p className="text-makmex-muted">Your cart is empty</p>
+            <p className="text-makmex-muted">{t('yourCartIsEmpty')}</p>
           ) : (
             <div className="space-y-4">
               {items.map((item, index) => (
@@ -141,14 +141,14 @@ export default function CheckoutPage() {
                     <p className="text-sm text-makmex-muted">SKU: {item.display_sku || item.sku}</p>
                     <p className="text-sm text-makmex-muted">Quantity: {item.quantity}</p>
                   </div>
-                  <p className="font-medium text-makmex-text">${(item.price * item.quantity).toFixed(2)}</p>
+                  <p className="font-medium text-makmex-text">{formatPrice(item.price * item.quantity)}</p>
                 </div>
               ))}
               
               <div className="border-t border-makmex-border pt-4">
                 <div className="flex justify-between items-center">
-                  <span className="text-lg font-semibold text-makmex-text">Total:</span>
-                  <span className="text-lg font-bold text-makmex-text">${getCartTotal().toFixed(2)}</span>
+                  <span className="text-lg font-semibold text-makmex-text">{t('total')}:</span>
+                  <span className="text-lg font-bold text-makmex-text">{formatPrice(getCartTotal())}</span>
                 </div>
               </div>
             </div>
@@ -157,18 +157,17 @@ export default function CheckoutPage() {
 
         {/* Checkout Form */}
         <div className="space-y-6">
-          <h2 className="text-xl font-semibold text-makmex-text">Shipping Information</h2>
+          <h2 className="text-xl font-semibold text-makmex-text">{t('shippingInformation')}</h2>
           
           <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
             <p className="text-sm text-yellow-800">
-              <strong>Important:</strong> For security reasons, customers are limited to one order per day. 
-              Please ensure all items in your cart are correct before placing your order.
+              <strong>{t('important')}:</strong> {t('securityNotice')}
             </p>
           </div>
           
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
-              <label className="block text-sm font-medium mb-2 text-makmex-text">Full Name</label>
+              <label className="block text-sm font-medium mb-2 text-makmex-text">{t('fullName')}</label>
               <input 
                 type="text" 
                 className="w-full p-3 border border-makmex-border rounded-lg bg-makmex-surface text-makmex-text focus:outline-none focus:border-makmex-orange"
@@ -179,7 +178,7 @@ export default function CheckoutPage() {
             </div>
             
             <div>
-              <label className="block text-sm font-medium mb-2 text-makmex-text">Email</label>
+              <label className="block text-sm font-medium mb-2 text-makmex-text">{t('email')}</label>
               <input 
                 type="email" 
                 className="w-full p-3 border border-makmex-border rounded-lg bg-makmex-surface text-makmex-text focus:outline-none focus:border-makmex-orange"
@@ -190,7 +189,7 @@ export default function CheckoutPage() {
             </div>
             
             <div>
-              <label className="block text-sm font-medium mb-2 text-makmex-text">Phone Number (Optional)</label>
+              <label className="block text-sm font-medium mb-2 text-makmex-text">{t('phoneNumber')}</label>
               <input 
                 type="tel" 
                 className="w-full p-3 border border-makmex-border rounded-lg bg-makmex-surface text-makmex-text focus:outline-none focus:border-makmex-orange"
@@ -205,13 +204,13 @@ export default function CheckoutPage() {
               className="w-full bg-makmex-orange text-black font-semibold py-3 rounded-lg hover:bg-makmex-ember transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={isSubmitting}
             >
-              {isSubmitting ? 'Placing Order...' : 'Place Order'}
+              {isSubmitting ? t('placingOrder') : t('placeOrder')}
             </button>
           </form>
           
           <div className="mt-6 p-4 bg-makmex-surface border border-makmex-border rounded-lg">
             <p className="text-sm text-makmex-muted">
-              <strong>Questions or Issues?</strong> Contact us at 
+              <strong>{t('questionsOrIssues')}</strong> {t('contactUsAt')} 
               <a href="mailto:test@gmail.com" className="text-makmex-orange hover:underline ml-1">
                 test@gmail.com
               </a>
