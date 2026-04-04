@@ -235,7 +235,7 @@ export default function CategoryPage({ title }) {
         ] = await Promise.all([
           withTimeout(getProducts(), 'products'),
           withTimeout(getCombos(), 'combos'),
-          withTimeout(getKits(), 'kits'),
+          withTimeout(getKits(), 'kits').catch((err) => ({ success: false, error: err.message })),
           withTimeout(getConditions(), 'conditions'),
           withTimeout(getPowerSources(), 'power sources')
         ]);
@@ -247,7 +247,7 @@ export default function CategoryPage({ title }) {
           throw new Error(`Combos: ${combosResult.error}`);
         }
         if (!kitsResult.success) {
-          throw new Error(`Kits: ${kitsResult.error}`);
+          console.warn('Kits failed to load on shopping page:', kitsResult.error);
         }
         if (!conditionsResult.success) {
           throw new Error(`Conditions: ${conditionsResult.error}`);

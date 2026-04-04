@@ -65,7 +65,7 @@ export default function DatabaseConnectionWrapper({ children }) {
 
   if (connectionState.loading) {
     return (
-      <div className="min-h-screen bg-makmex-panel flex items-center justify-center">
+      <div className="min-h-[var(--app-height)] bg-makmex-panel flex items-center justify-center">
         <div className="text-center space-y-4">
           <div className="w-16 h-16 border-4 border-makmex-orange border-t-transparent rounded-full animate-spin mx-auto"></div>
           <h2 className="text-xl font-bold text-makmex-text">Connecting to Database...</h2>
@@ -77,7 +77,7 @@ export default function DatabaseConnectionWrapper({ children }) {
 
   if (!connectionState.connected) {
     return (
-      <div className="min-h-screen bg-red-50 flex items-center justify-center p-6">
+      <div className="min-h-[var(--app-height)] bg-red-50 flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-white rounded-2xl border-2 border-red-200 p-8 text-center space-y-6">
           <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto">
             <svg className="w-10 h-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

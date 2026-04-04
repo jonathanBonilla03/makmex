@@ -1,4 +1,4 @@
-import React from 'react'
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import DatabaseConnectionWrapper from "./components/DatabaseConnectionWrapper"
 import StorefrontShell from "./components/StorefrontShell"
@@ -14,6 +14,26 @@ import { LanguageProvider } from "./context/LanguageContext"
 import { LocationProvider } from "./context/LocationContext"
 
 export default function App() {
+  useEffect(() => {
+    const root = document.documentElement
+
+    const updateViewportHeight = () => {
+      const viewportHeight = window.visualViewport?.height || window.innerHeight
+      root.style.setProperty('--app-height', `${Math.round(viewportHeight)}px`)
+    }
+
+    updateViewportHeight()
+    window.addEventListener('resize', updateViewportHeight)
+    window.addEventListener('orientationchange', updateViewportHeight)
+    window.visualViewport?.addEventListener('resize', updateViewportHeight)
+
+    return () => {
+      window.removeEventListener('resize', updateViewportHeight)
+      window.removeEventListener('orientationchange', updateViewportHeight)
+      window.visualViewport?.removeEventListener('resize', updateViewportHeight)
+    }
+  }, [])
+
   return (
     <DatabaseConnectionWrapper>
       <LanguageProvider>

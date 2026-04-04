@@ -261,7 +261,7 @@ export default function StorefrontShell({ children }) {
   };
 
   return (
-    <div className="min-h-screen bg-makmex-bg text-makmex-text">
+    <div className="min-h-[var(--app-height)] bg-makmex-bg text-makmex-text">
       {/* Top promo bar */}
       <div className={`border-b border-makmex-border ${theme === 'light' ? 'bg-makmex-panel/95' : 'bg-black/40'}`}>
         <div className="mx-auto max-w-7xl px-4 py-2 text-center text-xs text-makmex-muted">

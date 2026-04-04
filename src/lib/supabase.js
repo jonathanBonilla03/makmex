@@ -526,8 +526,9 @@ export async function getKits() {
           warehouse_location,
           max_kits_available
         `)
-        
-      if (!availabilityResult.error) {
+      if (availabilityResult.error) {
+        console.warn('Kit availability query error:', availabilityResult.error)
+      } else {
         availabilityData = availabilityResult.data || []
       }
     } catch (err) {
@@ -545,7 +546,7 @@ export async function getKits() {
 
     // Collect the FIRST product ID from each kit (requested card image source).
     const firstProductIds = new Set()
-    kitsResult.data.forEach(kit => {
+    (kitsResult.data || []).forEach(kit => {
       const firstItem = kit.kit_items?.[0]
       if (firstItem?.product_id) {
         firstProductIds.add(firstItem.product_id)
@@ -578,7 +579,7 @@ export async function getKits() {
     }
 
     // Transform the data to include calculated fields
-    const transformedData = kitsResult.data.map(kit => {
+    const transformedData = (kitsResult.data || []).map(kit => {
       // Get availability data for this kit
       const kitAvailability = availabilityMap[kit.id] || []
       

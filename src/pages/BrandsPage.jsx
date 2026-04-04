@@ -53,13 +53,15 @@ export default function BrandsPage() {
           withTimeout(supabase.from("brands").select("id, name"), "brands"),
           withTimeout(getProducts(), "products"),
           withTimeout(getCombos(), "combos"),
-          withTimeout(getKits(), "kits")
+          withTimeout(getKits(), "kits").catch((err) => ({ success: false, error: err.message }))
         ]);
 
         if (brandsResult.error) throw new Error(brandsResult.error.message);
         if (!productsInStockResult.success) throw new Error(productsInStockResult.error);
         if (!combosInStockResult.success) throw new Error(combosInStockResult.error);
-        if (!kitsInStockResult.success) throw new Error(kitsInStockResult.error);
+        if (!kitsInStockResult.success) {
+          console.warn('Kits failed to load on brands page:', kitsInStockResult.error);
+        }
 
         const brandCounts = new Map();
         const brandNameToId = new Map();

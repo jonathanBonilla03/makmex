@@ -7,7 +7,7 @@ export default function OrderSuccessPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-makmex-surface">
+    <div className="min-h-[var(--app-height)] flex items-center justify-center bg-makmex-surface">
       <div className="max-w-md w-full space-y-8 p-8">
         <div className="text-center">
           {/* Success Icon */}
