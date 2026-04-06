@@ -11,6 +11,15 @@ body,
   min-height: 100%;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+html,
+body {
+  overflow-x: hidden;
+}
+
 body {
   min-height: var(--app-height);
 }

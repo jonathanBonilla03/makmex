@@ -56,6 +56,14 @@ async function getProductImageUrls(productImages) {
     .filter(image => image !== null)
     .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
 }
+
+function chunkArray(items, chunkSize) {
+  const chunks = []
+  for (let i = 0; i < items.length; i += chunkSize) {
+    chunks.push(items.slice(i, i + chunkSize))
+  }
+  return chunks
+}
 /**
  * Get all products with their related data (brands, conditions, product types, inventory)
  * @returns {Promise<{success: boolean, data?: any[], error?: string}>}
@@ -472,17 +480,14 @@ export async function getCombos() {
 export async function getKits() {
   try {
     console.log('Fetching kits from Supabase...')
-    
-    // Fetch kits data
-    const kitsResult = await supabase
-      .from('kits')
-      .select(`
+
+    const kitsSelect = `
         id,
-        specs,
         description,
         sku,
         brand_id,
         product_type_id,
+        specs,
         brands!brand_id (
           id,
           name
@@ -509,11 +514,54 @@ export async function getKits() {
             )
           )
         )
-      `)
+      `
+
+    const kitsFallbackSelect = `
+        id,
+        description,
+        sku,
+        brand_id,
+        product_type_id,
+        specs,
+        brands!brand_id (
+          id,
+          name
+        ),
+        kit_items (
+          id,
+          product_id,
+          role,
+          quantity,
+          kit_discount,
+          products!product_id (
+            description,
+            condition_id,
+            brand_id,
+            brands!brand_id (
+              name
+            ),
+            conditions!condition_id (
+              general_condition
+            )
+          )
+        )
+      `
+
+    // Fetch kits data
+    let kitsResult = await supabase
+      .from('kits')
+      .select(kitsSelect)
 
     if (kitsResult.error) {
-      console.error('Kits query error:', kitsResult.error)
-      return { success: false, error: kitsResult.error.message }
+      console.warn('Kits primary query failed, retrying fallback query:', kitsResult.error)
+      kitsResult = await supabase
+        .from('kits')
+        .select(kitsFallbackSelect)
+
+      if (kitsResult.error) {
+        console.warn('Kits fallback query failed, continuing without kits:', kitsResult.error)
+        return { success: true, data: [] }
+      }
     }
 
     // Try to fetch availability data
@@ -526,9 +574,8 @@ export async function getKits() {
           warehouse_location,
           max_kits_available
         `)
-      if (availabilityResult.error) {
-        console.warn('Kit availability query error:', availabilityResult.error)
-      } else {
+
+      if (!availabilityResult.error) {
         availabilityData = availabilityResult.data || []
       }
     } catch (err) {
@@ -544,27 +591,43 @@ export async function getKits() {
       availabilityMap[avail.kit_id].push(avail)
     })
 
-    // Collect the FIRST product ID from each kit (requested card image source).
+    // Collect every product ID from each kit so any related image can be used.
     const firstProductIds = new Set()
-    (kitsResult.data || []).forEach(kit => {
-      const firstItem = kit.kit_items?.[0]
-      if (firstItem?.product_id) {
-        firstProductIds.add(firstItem.product_id)
-      }
+    const kitsData = kitsResult.data || []
+
+    kitsData.forEach(kit => {
+      ;(kit.kit_items || []).forEach((item) => {
+        if (item?.product_id) {
+          firstProductIds.add(item.product_id)
+        }
+      })
     })
 
-    // Fetch product images only for first kit item products.
+    // Fetch product images for all kit item products.
     let productImagesMap = {}
     if (firstProductIds.size > 0) {
-      const imagesResult = await supabase
-        .from('product_images')
-        .select('id, product_id, bucket, path, sort_order, is_primary')
-        .in('product_id', Array.from(firstProductIds))
-        .order('sort_order')
+      const allProductIds = Array.from(firstProductIds)
+      const productIdChunks = chunkArray(allProductIds, 100)
+      const rawImages = []
 
-      if (imagesResult.data) {
+      for (const productIdChunk of productIdChunks) {
+        const imagesResult = await supabase
+          .from('product_images')
+          .select('id, product_id, bucket, path, sort_order, is_primary')
+          .in('product_id', productIdChunk)
+          .order('sort_order')
+
+        if (imagesResult.error) {
+          console.warn('Kit images chunk query error:', imagesResult.error)
+          continue
+        }
+
+        rawImages.push(...(imagesResult.data || []))
+      }
+
+      if (rawImages.length > 0) {
         const imageMap = {}
-        imagesResult.data.forEach(image => {
+        rawImages.forEach(image => {
           if (!imageMap[image.product_id]) {
             imageMap[image.product_id] = []
           }
@@ -579,7 +642,7 @@ export async function getKits() {
     }
 
     // Transform the data to include calculated fields
-    const transformedData = (kitsResult.data || []).map(kit => {
+    const transformedData = kitsData.map(kit => {
       // Get availability data for this kit
       const kitAvailability = availabilityMap[kit.id] || []
       
@@ -630,10 +693,9 @@ export async function getKits() {
         overallCondition = conditionNames[overallConditionId] || 'New'
       }
 
-      // Transform kit_items and only attach images to the first item's product.
+      // Transform kit_items and attach images to any matching product.
       const transformedKitItems = kit.kit_items?.map(item => {
-        const firstProductId = kit.kit_items?.[0]?.product_id
-        const images = item.product_id === firstProductId ? (productImagesMap[item.product_id] || []) : []
+        const images = productImagesMap[item.product_id] || []
         const primary_image = images.find(img => img.is_primary) || images[0]
         
         return {
@@ -646,16 +708,13 @@ export async function getKits() {
         }
       }) || []
 
-      // Use the first kit item's product image for the card.
-      let kitPrimaryImage = null
-      const firstKitProductId = kit.kit_items?.[0]?.product_id
-      const firstKitProductImages = firstKitProductId ? (productImagesMap[firstKitProductId] || []) : []
-      const kitImage = firstKitProductImages.find(img => img.is_primary) || firstKitProductImages[0]
-      const kitImageUrl = kitImage?.card_url || kitImage?.public_url || null
-      
-      if (kitImageUrl) {
-        kitPrimaryImage = kitImage
-      }
+      // Use the first available image from any kit item product for the card.
+      const kitImages = (kit.kit_items || [])
+        .map((item) => productImagesMap[item.product_id] || [])
+        .flat()
+
+      const kitPrimaryImage = kitImages.find((img) => img.is_primary) || kitImages[0] || null
+      const kitImageUrl = kitPrimaryImage?.card_url || kitPrimaryImage?.public_url || null
       
       return {
         ...kit,
@@ -683,6 +742,9 @@ export async function getKits() {
         type: 'kit',
         // Use description as name
         name: kit.description,
+
+        // Kit images mirror combo/product payload shape
+        images: kitImages,
 
     // FIXED: Use signed URLs for images - set both for card compatibility
         primary_image: kitPrimaryImage,

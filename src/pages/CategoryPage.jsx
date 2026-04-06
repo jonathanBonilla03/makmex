@@ -10,6 +10,11 @@ const CONDITION_ORDER = ['AA', 'A', 'B', 'C', 'D', 'E', 'F'];
 const REQUEST_TIMEOUT_MS = 20000;
 const WIDE_VIEW_MIN_WIDTH = 1024;
 
+const getViewportWidth = () => {
+  if (typeof window === 'undefined') return WIDE_VIEW_MIN_WIDTH;
+  return window.visualViewport?.width || window.innerWidth;
+};
+
 const { data: shoppingHeroImageData } = supabase.storage
   .from("web-images")
   .getPublicUrl("home-page/Shelf-Showcase-Milwaukee.jpg");
@@ -78,16 +83,35 @@ const getItemPowerSources = (item) => {
   return values;
 };
 
+const hasRenderableImage = (value) => {
+  if (!value) return false;
+  if (typeof value === 'string') return Boolean(value.trim());
+  return Boolean(value.public_url || value.card_url || value.image_url);
+};
+
+const hasAnyRenderableImage = (node) => {
+  if (!node) return false;
+
+  if (Array.isArray(node)) {
+    return node.some(hasAnyRenderableImage);
+  }
+
+  if (hasRenderableImage(node)) return true;
+
+  const nestedValues = [
+    node.primary_image,
+    node.image_url,
+    node.images,
+    node.kit_items,
+    node.combo_items,
+    node.products
+  ];
+
+  return nestedValues.some(hasAnyRenderableImage);
+};
+
 const hasItemImage = (item) => {
-  if (item.primary_image?.public_url || item.image_url) return true;
-  if (item.images && item.images.length > 0) return true;
-
-  const subHasImage = getSubItems(item).some((subItem) => {
-    if (subItem.products?.primary_image?.public_url || subItem.products?.image_url) return true;
-    return Boolean(subItem.products?.images?.length);
-  });
-
-  return subHasImage;
+  return hasAnyRenderableImage(item);
 };
 
 const normalizeSearchText = (value) =>
@@ -101,6 +125,7 @@ const buildSearchBlob = (item) => {
   const rootParts = [
     item.name,
     item.description,
+    item.sku,
     item.display_sku,
     item.model,
     item.brand_name,
@@ -115,6 +140,7 @@ const buildSearchBlob = (item) => {
     return [
       nestedProduct.name,
       nestedProduct.description,
+      nestedProduct.sku,
       nestedProduct.display_sku,
       nestedProduct.model,
       nestedProduct.brand_name,
@@ -201,7 +227,7 @@ export default function CategoryPage({ title }) {
     return saved === 'standard' ? 'standard' : 'compact';
   });
   const [isWideViewAvailable, setIsWideViewAvailable] = useState(() =>
-    typeof window !== 'undefined' ? window.innerWidth >= WIDE_VIEW_MIN_WIDTH : true
+    getViewportWidth() >= WIDE_VIEW_MIN_WIDTH
   );
 
   // Pagination
@@ -290,7 +316,7 @@ export default function CategoryPage({ title }) {
 
   useEffect(() => {
     const updateWideViewAvailability = () => {
-      const canUseWide = window.innerWidth >= WIDE_VIEW_MIN_WIDTH;
+      const canUseWide = getViewportWidth() >= WIDE_VIEW_MIN_WIDTH;
       setIsWideViewAvailable(canUseWide);
       if (!canUseWide) {
         setViewMode('compact');
@@ -299,8 +325,14 @@ export default function CategoryPage({ title }) {
 
     updateWideViewAvailability();
     window.addEventListener('resize', updateWideViewAvailability);
+    window.addEventListener('orientationchange', updateWideViewAvailability);
+    window.visualViewport?.addEventListener('resize', updateWideViewAvailability);
 
-    return () => window.removeEventListener('resize', updateWideViewAvailability);
+    return () => {
+      window.removeEventListener('resize', updateWideViewAvailability);
+      window.removeEventListener('orientationchange', updateWideViewAvailability);
+      window.visualViewport?.removeEventListener('resize', updateWideViewAvailability);
+    };
   }, []);
 
   const filteredItems = useMemo(() => {
@@ -528,6 +560,12 @@ export default function CategoryPage({ title }) {
     const rawBrandFromQuery = searchParams.get("brand");
     const brandFromQuery = String(rawBrandFromQuery || "").trim().slice(0, 120);
 
+    // Wait until shopping data/filter options are loaded before consuming brand query.
+    // Without this, the query can be removed too early on first load and never applied.
+    if (loading) {
+      return;
+    }
+
     if (!brandFromQuery) {
       appliedBrandFromQueryRef.current = null;
       return;
@@ -565,7 +603,7 @@ export default function CategoryPage({ title }) {
       `${location.pathname}${nextQueryString ? `?${nextQueryString}` : ""}`,
       { replace: true }
     );
-  }, [searchParams, navigate, location.pathname, availableFilterOptions.brands]);
+  }, [searchParams, navigate, location.pathname, availableFilterOptions.brands, loading]);
 
   const filterSidebarProps = {
     priceRange,

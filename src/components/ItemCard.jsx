@@ -48,6 +48,50 @@ function getTypeBadge(type, t) {
   return { label: `🛠️ ${t('product')}`, className: 'type-badge-accent bg-makmex-surface text-makmex-muted border border-makmex-border' };
 }
 
+function getFirstAvailableImageUrl(itemType, primaryImage, imageUrl, comboItems, kitItems) {
+  if (primaryImage?.card_url || primaryImage?.public_url) {
+    return primaryImage.card_url || primaryImage.public_url;
+  }
+
+  if (imageUrl) {
+    return imageUrl;
+  }
+
+  const rootItems = itemType === 'combo' ? comboItems : (itemType === 'kit' ? kitItems : []);
+
+  if (Array.isArray(rootItems)) {
+    for (const rootItem of rootItems) {
+      if (Array.isArray(rootItem?.images) && rootItem.images.length > 0) {
+        const firstRootImage = rootItem.images.find((img) => img?.card_url || img?.public_url) || rootItem.images[0];
+        if (firstRootImage?.card_url || firstRootImage?.public_url) {
+          return firstRootImage.card_url || firstRootImage.public_url;
+        }
+      }
+    }
+  }
+
+  const nestedItems = rootItems;
+
+  for (const nestedItem of nestedItems) {
+    const nestedPrimary = nestedItem.products?.primary_image;
+    if (nestedPrimary?.card_url || nestedPrimary?.public_url) {
+      return nestedPrimary.card_url || nestedPrimary.public_url;
+    }
+
+    if (nestedItem.products?.image_url) {
+      return nestedItem.products.image_url;
+    }
+
+    const nestedImages = nestedItem.products?.images || [];
+    const firstNestedImage = nestedImages[0];
+    if (firstNestedImage?.card_url || firstNestedImage?.public_url) {
+      return firstNestedImage.card_url || firstNestedImage.public_url;
+    }
+  }
+
+  return '';
+}
+
 export default function ItemCard({
   id,
   name,
@@ -77,7 +121,7 @@ export default function ItemCard({
   const { t, formatPrice, translateConditionName, translatePowerSource } = useLanguage();
 
   const cardTitle = name || description;
-  const displayImageUrl = primary_image?.card_url || primary_image?.public_url || image_url;
+  const displayImageUrl = getFirstAvailableImageUrl(type, primary_image, image_url, combo_items, kit_items);
   
   const itemsList = type === 'combo' ? combo_items : (type === 'kit' ? kit_items : []);
   const displayItems = itemsList.map(ci => ({

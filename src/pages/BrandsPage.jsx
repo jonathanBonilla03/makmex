@@ -4,6 +4,7 @@ import { getCombos, getKits, getProducts, supabase } from "../lib/supabase";
 import { useLanguage } from "../context/LanguageContext";
 
 const REQUEST_TIMEOUT_MS = 20000;
+const BRAND_IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "avif"];
 
 const { data: brandsHeroImageData } = supabase.storage
   .from("web-images")
@@ -37,6 +38,45 @@ const getItemBrands = (item) => {
   return values;
 };
 
+const buildBrandImageCandidates = (brandName) => {
+  const trimmed = String(brandName || "").trim();
+  if (!trimmed) return [];
+
+  return BRAND_IMAGE_EXTENSIONS.map((extension) => `brands-page/${trimmed}.${extension}`);
+};
+
+const getPublicStorageUrl = (path) => {
+  const { data } = supabase.storage.from("web-images").getPublicUrl(path);
+  return data?.publicUrl || "";
+};
+
+const imageExists = (url) =>
+  new Promise((resolve) => {
+    if (!url) {
+      resolve(false);
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => resolve(true);
+    img.onerror = () => resolve(false);
+    img.src = url;
+  });
+
+const resolveBrandImageUrl = async (brandName) => {
+  const candidates = buildBrandImageCandidates(brandName);
+
+  for (const path of candidates) {
+    const url = getPublicStorageUrl(path);
+    // getPublicUrl always returns a URL shape; verify it actually resolves.
+    if (await imageExists(url)) {
+      return url;
+    }
+  }
+
+  return "";
+};
+
 export default function BrandsPage() {
   const { t } = useLanguage();
   const [brands, setBrands] = useState([]);
@@ -44,6 +84,8 @@ export default function BrandsPage() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    let isActive = true;
+
     async function loadBrands() {
       setLoading(true);
       setError(null);
@@ -98,15 +140,33 @@ export default function BrandsPage() {
             return a.name.localeCompare(b.name);
           });
 
-        setBrands(rankedBrands);
+        const inStockBrands = rankedBrands.filter((brand) => brand.inStockCount > 0);
+
+        const withImages = await Promise.all(
+          inStockBrands.map(async (brand) => ({
+            ...brand,
+            image_url: await resolveBrandImageUrl(brand.name)
+          }))
+        );
+
+        if (!isActive) return;
+        setBrands(withImages.filter((brand) => brand.image_url));
       } catch (err) {
-        setError(err.message || "Failed to load brands");
+        if (isActive) {
+          setError(err.message || "Failed to load brands");
+        }
       } finally {
-        setLoading(false);
+        if (isActive) {
+          setLoading(false);
+        }
       }
     }
 
     loadBrands();
+
+    return () => {
+      isActive = false;
+    };
   }, []);
 
   const topThree = useMemo(() => brands.slice(0, 3), [brands]);
@@ -151,60 +211,42 @@ export default function BrandsPage() {
       {loading ? (
         <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
           {Array.from({ length: 6 }).map((_, index) => (
-            <div key={index} className="aspect-square w-full rounded-2xl border border-makmex-border bg-makmex-panel p-4 sm:p-5">
-              <div className="h-24 sm:h-28 animate-pulse rounded-xl border border-dashed border-makmex-border bg-black/20" />
-              <div className="mt-4 h-4 w-2/3 animate-pulse rounded bg-makmex-border/60" />
-              <div className="mt-2 h-3 w-1/3 animate-pulse rounded bg-makmex-border/40" />
-              <div className="mt-6 h-10 w-full animate-pulse rounded-xl bg-makmex-border/60" />
+            <div key={index} className="aspect-square w-full overflow-hidden rounded-2xl border border-makmex-border bg-makmex-panel">
+              <div className="h-full w-full animate-pulse bg-makmex-border/40" />
             </div>
           ))}
         </div>
       ) : (
         <section className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
-          {brands.map((brand, index) => (
-            <article
+          {brands.map((brand) => (
+            <Link
               key={brand.id}
-              className={`group aspect-square w-full flex flex-col overflow-hidden rounded-2xl border border-makmex-border bg-makmex-panel p-4 sm:p-5 shadow-card transition duration-300 ${
-                brand.inStockCount > 0
-                  ? 'hover:-translate-y-1 hover:border-makmex-orange/60'
-                  : 'opacity-50 saturate-75'
-              }`}
+              to={`/shopping?brand=${encodeURIComponent(brand.name)}`}
+              className="group relative aspect-square w-full overflow-hidden rounded-2xl border border-makmex-border bg-white shadow-card transition duration-300 hover:-translate-y-1 hover:border-makmex-orange/60"
             >
-              <div className="relative mb-3 sm:mb-4 overflow-hidden rounded-xl border border-dashed border-makmex-border bg-black/25 p-3 sm:p-4">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/[0.04] to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
-                <div className="flex h-16 sm:h-20 items-center justify-center text-center text-xs font-semibold uppercase tracking-wider text-makmex-muted">
-                  {t("brandLogoPlaceholder")}
-                </div>
-              </div>
+              <div className="absolute inset-0 bg-white" />
+              <img
+                src={brand.image_url}
+                alt={brand.name}
+                loading="lazy"
+                className="relative z-10 h-full w-full object-contain p-3 transition duration-500 group-hover:scale-105"
+              />
 
-              <div className="space-y-1">
-                <h2 className="text-lg sm:text-xl font-extrabold text-makmex-text">{brand.name}</h2>
-                <p className="text-xs sm:text-sm text-makmex-muted">
+              <div className="absolute inset-x-0 bottom-0 z-20 border-t border-black/10 bg-white/95 p-3 sm:p-4 backdrop-blur-[1px]">
+                <h2 className="text-base sm:text-lg font-extrabold text-black">{brand.name}</h2>
+                <p className="text-xs sm:text-sm text-black/80">
                   {brand.inStockCount} {brand.inStockCount === 1 ? t("itemInStock") : t("itemsInStock")}
                 </p>
               </div>
-
-              <div className="mt-auto pt-3 sm:pt-4">
-                {brand.inStockCount > 0 ? (
-                  <Link
-                    to={`/shopping?brand=${encodeURIComponent(brand.name)}`}
-                    className="block w-full rounded-xl bg-makmex-orange px-3 sm:px-4 py-2 sm:py-2.5 text-center text-xs sm:text-sm font-semibold text-black transition-colors duration-300 hover:bg-makmex-ember"
-                  >
-                    {t("shopWithBrand", { brand: brand.name })}
-                  </Link>
-                ) : (
-                  <button
-                    type="button"
-                    disabled
-                    className="block w-full cursor-not-allowed rounded-xl bg-makmex-border px-3 sm:px-4 py-2 sm:py-2.5 text-center text-xs sm:text-sm font-semibold text-makmex-muted"
-                  >
-                    {t("outOfStock")}
-                  </button>
-                )}
-              </div>
-            </article>
+            </Link>
           ))}
         </section>
+      )}
+
+      {!loading && !error && brands.length === 0 && (
+        <div className="rounded-2xl border border-makmex-border bg-makmex-panel p-6 text-center text-sm text-makmex-muted">
+          {t("noItemsFound")}
+        </div>
       )}
     </div>
   );

@@ -6,6 +6,11 @@ import { getProducts } from "../lib/supabase";
 
 const REQUEST_TIMEOUT_MS = 20000;
 
+const getViewportWidth = () => {
+  if (typeof window === "undefined") return 1280;
+  return window.visualViewport?.width || window.innerWidth;
+};
+
 const getSafeImageUrl = (value) => {
   if (!value) return "";
 
@@ -143,7 +148,7 @@ export default function HomePage() {
 
   useEffect(() => {
     const updateFeaturedItemsPerPage = () => {
-      const width = window.innerWidth;
+      const width = getViewportWidth();
       if (width < 640) {
         setFeaturedItemsPerPage(2);
         return;
@@ -159,8 +164,14 @@ export default function HomePage() {
 
     updateFeaturedItemsPerPage();
     window.addEventListener("resize", updateFeaturedItemsPerPage);
+    window.addEventListener("orientationchange", updateFeaturedItemsPerPage);
+    window.visualViewport?.addEventListener("resize", updateFeaturedItemsPerPage);
 
-    return () => window.removeEventListener("resize", updateFeaturedItemsPerPage);
+    return () => {
+      window.removeEventListener("resize", updateFeaturedItemsPerPage);
+      window.removeEventListener("orientationchange", updateFeaturedItemsPerPage);
+      window.visualViewport?.removeEventListener("resize", updateFeaturedItemsPerPage);
+    };
   }, []);
 
   const newestProductPages = useMemo(() => {
