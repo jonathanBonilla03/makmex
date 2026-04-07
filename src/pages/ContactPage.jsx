@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useLanguage } from "../context/LanguageContext";
+import { useLoadingStatus } from "../context/LoadingContext";
 
 const REQUEST_TIMEOUT_MS = 20000;
 
@@ -28,14 +29,18 @@ function buildPlaceholderContact(locationName, index) {
 
 export default function ContactPage() {
   const { t } = useLanguage();
+  const { startLoading, stopLoading } = useLoadingStatus();
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    let isActive = true;
+
     async function loadLocations() {
       setLoading(true);
       setError(null);
+      startLoading();
 
       try {
         const { data, error: warehouseError } = await withTimeout(
@@ -54,17 +59,28 @@ export default function ContactPage() {
         ];
 
         const source = data && data.length > 0 ? data : fallbackLocations;
-        setLocations(source.slice(0, 3));
+        if (isActive) {
+          setLocations(source.slice(0, 3));
+        }
       } catch (err) {
-        setError(err.message || "Failed to load contact locations");
-        setLocations([]);
+        if (isActive) {
+          setError(err.message || "Failed to load contact locations");
+          setLocations([]);
+        }
       } finally {
-        setLoading(false);
+        if (isActive) {
+          setLoading(false);
+        }
+        stopLoading();
       }
     }
 
     loadLocations();
-  }, []);
+
+    return () => {
+      isActive = false;
+    };
+  }, [startLoading, stopLoading]);
 
   return (
     <div className="space-y-8 pb-12">

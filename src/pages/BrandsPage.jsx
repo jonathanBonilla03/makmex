@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { getCombos, getKits, getProducts, supabase } from "../lib/supabase";
 import { useLanguage } from "../context/LanguageContext";
+import { useLoadingStatus } from "../context/LoadingContext";
 
 const REQUEST_TIMEOUT_MS = 20000;
-const BRAND_IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "avif"];
+const BRAND_IMAGE_EXTENSIONS = ["webp", "avif", "jpg", "jpeg", "png"];
 
 const { data: brandsHeroImageData } = supabase.storage
   .from("web-images")
@@ -50,35 +51,55 @@ const getPublicStorageUrl = (path) => {
   return data?.publicUrl || "";
 };
 
-const imageExists = (url) =>
-  new Promise((resolve) => {
-    if (!url) {
-      resolve(false);
-      return;
-    }
+const buildBrandImageUrls = (brandName) =>
+  buildBrandImageCandidates(brandName)
+    .map((path) => getPublicStorageUrl(path))
+    .filter(Boolean);
 
-    const img = new Image();
-    img.onload = () => resolve(true);
-    img.onerror = () => resolve(false);
-    img.src = url;
-  });
+function BrandCard({ brand, t }) {
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const imageUrls = brand.image_urls || [];
+  const activeImageUrl = imageUrls[currentImageIndex] || "";
 
-const resolveBrandImageUrl = async (brandName) => {
-  const candidates = buildBrandImageCandidates(brandName);
+  if (!activeImageUrl) return null;
 
-  for (const path of candidates) {
-    const url = getPublicStorageUrl(path);
-    // getPublicUrl always returns a URL shape; verify it actually resolves.
-    if (await imageExists(url)) {
-      return url;
-    }
-  }
+  return (
+    <Link
+      key={brand.id}
+      to={`/shopping?brand=${encodeURIComponent(brand.name)}`}
+      className="group relative aspect-square w-full overflow-hidden rounded-2xl border border-makmex-border bg-white shadow-card transition duration-300 hover:-translate-y-1 hover:border-makmex-orange/60"
+    >
+      <div className="absolute inset-0 bg-white" />
+      <img
+        src={activeImageUrl}
+        alt={brand.name}
+        loading="lazy"
+        decoding="async"
+        fetchPriority="low"
+        className="relative z-10 h-full w-full object-contain p-3 transition duration-500 group-hover:scale-105"
+        onError={() => {
+          setCurrentImageIndex((prev) => {
+            if (prev >= imageUrls.length - 1) {
+              return prev;
+            }
+            return prev + 1;
+          });
+        }}
+      />
 
-  return "";
-};
+      <div className="absolute inset-x-0 bottom-0 z-20 border-t border-black/10 bg-white/95 p-3 sm:p-4 backdrop-blur-[1px]">
+        <h2 className="text-base sm:text-lg font-extrabold text-black">{brand.name}</h2>
+        <p className="text-xs sm:text-sm text-black/80">
+          {brand.inStockCount} {brand.inStockCount === 1 ? t("itemInStock") : t("itemsInStock")}
+        </p>
+      </div>
+    </Link>
+  );
+}
 
 export default function BrandsPage() {
   const { t } = useLanguage();
+  const { startLoading, stopLoading } = useLoadingStatus();
   const [brands, setBrands] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -89,6 +110,7 @@ export default function BrandsPage() {
     async function loadBrands() {
       setLoading(true);
       setError(null);
+      startLoading();
 
       try {
         const [brandsResult, productsInStockResult, combosInStockResult, kitsInStockResult] = await Promise.all([
@@ -142,15 +164,15 @@ export default function BrandsPage() {
 
         const inStockBrands = rankedBrands.filter((brand) => brand.inStockCount > 0);
 
-        const withImages = await Promise.all(
-          inStockBrands.map(async (brand) => ({
-            ...brand,
-            image_url: await resolveBrandImageUrl(brand.name)
-          }))
-        );
-
         if (!isActive) return;
-        setBrands(withImages.filter((brand) => brand.image_url));
+        setBrands(
+          inStockBrands
+            .map((brand) => ({
+              ...brand,
+              image_urls: buildBrandImageUrls(brand.name)
+            }))
+            .filter((brand) => brand.image_urls.length > 0)
+        );
       } catch (err) {
         if (isActive) {
           setError(err.message || "Failed to load brands");
@@ -159,6 +181,7 @@ export default function BrandsPage() {
         if (isActive) {
           setLoading(false);
         }
+        stopLoading();
       }
     }
 
@@ -167,7 +190,7 @@ export default function BrandsPage() {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [startLoading, stopLoading]);
 
   const topThree = useMemo(() => brands.slice(0, 3), [brands]);
 
@@ -218,28 +241,7 @@ export default function BrandsPage() {
         </div>
       ) : (
         <section className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
-          {brands.map((brand) => (
-            <Link
-              key={brand.id}
-              to={`/shopping?brand=${encodeURIComponent(brand.name)}`}
-              className="group relative aspect-square w-full overflow-hidden rounded-2xl border border-makmex-border bg-white shadow-card transition duration-300 hover:-translate-y-1 hover:border-makmex-orange/60"
-            >
-              <div className="absolute inset-0 bg-white" />
-              <img
-                src={brand.image_url}
-                alt={brand.name}
-                loading="lazy"
-                className="relative z-10 h-full w-full object-contain p-3 transition duration-500 group-hover:scale-105"
-              />
-
-              <div className="absolute inset-x-0 bottom-0 z-20 border-t border-black/10 bg-white/95 p-3 sm:p-4 backdrop-blur-[1px]">
-                <h2 className="text-base sm:text-lg font-extrabold text-black">{brand.name}</h2>
-                <p className="text-xs sm:text-sm text-black/80">
-                  {brand.inStockCount} {brand.inStockCount === 1 ? t("itemInStock") : t("itemsInStock")}
-                </p>
-              </div>
-            </Link>
-          ))}
+          {brands.map((brand) => <BrandCard key={brand.id} brand={brand} t={t} />)}
         </section>
       )}
 

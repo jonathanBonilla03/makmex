@@ -1,10 +1,11 @@
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef, useDeferredValue } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import ItemCard from "../components/ItemCard";
 import FilterSidebar from "../components/FilterSidebar";
 import { getProducts, getCombos, getKits, getConditions, getPowerSources, supabase } from "../lib/supabase";
 import { useLanguage } from "../context/LanguageContext";
 import { useLocations } from "../context/LocationContext";
+import { useLoadingStatus } from "../context/LoadingContext";
 
 const CONDITION_ORDER = ['AA', 'A', 'B', 'C', 'D', 'E', 'F'];
 const REQUEST_TIMEOUT_MS = 20000;
@@ -210,6 +211,7 @@ const calculateRelevanceScore = (item, query, tokens) => {
 
 export default function CategoryPage({ title }) {
   const { t } = useLanguage();
+  const { startLoading, stopLoading } = useLoadingStatus();
   const pageTitle = title || t('shoppingPageTitle') || 'Shop MakMex';
   const { selectedLocations, clearLocations, updateAvailableLocations } = useLocations();
   const [searchParams] = useSearchParams();
@@ -265,9 +267,12 @@ export default function CategoryPage({ title }) {
 
   // Load data on mount
   useEffect(() => {
+    let isActive = true;
+
     async function loadData() {
       setLoading(true);
       setError(null);
+      startLoading();
 
       try {
         const [
@@ -306,6 +311,8 @@ export default function CategoryPage({ title }) {
           ...(kitsResult.data || [])
         ];
 
+        if (!isActive) return;
+
         setItems(unifiedItems);
         setConditions(conditionsResult.data);
         setPowerSources(powerSourcesResult.data);
@@ -318,15 +325,24 @@ export default function CategoryPage({ title }) {
           setPriceInputs({ min: minPrice.toString(), max: maxPrice.toString() });
         }
       } catch (err) {
-        setError(err.message);
+        if (isActive) {
+          setError(err.message);
+        }
         console.error("Error loading shopping page data:", err);
       } finally {
-        setLoading(false);
+        if (isActive) {
+          setLoading(false);
+        }
+        stopLoading();
       }
     }
 
     loadData();
-  }, []);
+
+    return () => {
+      isActive = false;
+    };
+  }, [startLoading, stopLoading]);
 
   useEffect(() => {
     setStoredValue('makmex-shopping-view-mode', viewMode);
@@ -439,6 +455,8 @@ export default function CategoryPage({ title }) {
     searchTokens
   ]);
 
+  const deferredFilteredItems = useDeferredValue(filteredItems);
+
   const availableFilterOptions = useMemo(() => {
     const inStockItems = items.filter((entry) => entry.in_stock);
     const brandsSet = new Set();
@@ -472,11 +490,11 @@ export default function CategoryPage({ title }) {
     };
   }, [items, conditions, powerSources, t]);
 
-  const totalItems = filteredItems.length;
+  const totalItems = deferredFilteredItems.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const shownItems = filteredItems.slice(startIndex, endIndex);
+  const shownItems = deferredFilteredItems.slice(startIndex, endIndex);
 
   useEffect(() => {
     const currentScrollY = window.scrollY;

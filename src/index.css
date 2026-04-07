@@ -136,4 +136,37 @@ body {
     opacity: 1 !important;
     transform: none !important;
   }
+
+  .loading-line-indicator {
+    animation: none !important;
+    transform: translateX(0) !important;
+  }
+}
+
+.loading-line-indicator {
+  display: block;
+  height: 100%;
+  width: 34%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, rgba(255, 107, 53, 0.15), rgba(255, 107, 53, 0.95), rgba(255, 138, 92, 0.35));
+  box-shadow: 0 0 10px rgba(255, 107, 53, 0.55);
+  transform: translateX(-130%);
+  opacity: 0;
+  animation: loadingLineSweep 1.7s linear infinite;
+  animation-play-state: paused;
+  transition: opacity 200ms ease;
+}
+
+.loading-line-indicator.is-loading {
+  opacity: 1;
+  animation-play-state: running;
+}
+
+@keyframes loadingLineSweep {
+  0% {
+    transform: translateX(-130%);
+  }
+  100% {
+    transform: translateX(560%);
+  }
 }

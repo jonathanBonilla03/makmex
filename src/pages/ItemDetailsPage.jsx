@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getProductById, getComboById, getKitById } from '../lib/supabase';
 import { useCart } from '../context/CartContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useLoadingStatus } from '../context/LoadingContext';
 
 // Helper function to format condition display with emoji and symbol
 function getConditionDisplay(conditionName, conditionId, translateConditionName) {
@@ -181,6 +182,7 @@ export default function ItemDetailsPage() {
   const navigate = useNavigate();
   const { addToCart } = useCart();
   const { t, translateConditionName, translatePowerSource, translateProductType } = useLanguage();
+  const { startLoading, stopLoading } = useLoadingStatus();
   
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -191,9 +193,12 @@ export default function ItemDetailsPage() {
   const [addedToCart, setAddedToCart] = useState(false);
 
   useEffect(() => {
+    let isActive = true;
+
     async function loadItem() {
       setLoading(true);
       setError(null);
+      startLoading();
 
       try {
         let result;
@@ -215,16 +220,27 @@ export default function ItemDetailsPage() {
           throw new Error(result.error);
         }
 
-        setItem(result.data);
+        if (isActive) {
+          setItem(result.data);
+        }
       } catch (err) {
-        setError(err.message);
+        if (isActive) {
+          setError(err.message);
+        }
       } finally {
-        setLoading(false);
+        if (isActive) {
+          setLoading(false);
+        }
+        stopLoading();
       }
     }
 
     loadItem();
-  }, [type, id]);
+
+    return () => {
+      isActive = false;
+    };
+  }, [type, id, startLoading, stopLoading]);
 
   const images = useMemo(() => {
     const nextImages = [];

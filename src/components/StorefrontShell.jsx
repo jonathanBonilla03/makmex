@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useLocations } from "../context/LocationContext";
+import { useLoadingStatus } from "../context/LoadingContext";
 import { supabase } from "../lib/supabase";
 
 const { data: homeLogoImageData } = supabase.storage
@@ -192,6 +193,7 @@ export default function StorefrontShell({ children }) {
   const { getCartItemsCount } = useCart();
   const { t, language, toggleLanguage } = useLanguage();
   const { selectedLocations, availableLocations, toggleLocation } = useLocations();
+  const { isLoading } = useLoadingStatus();
   const mobileCartCount = getCartItemsCount();
 
   const getLocationShortLabel = (location) => {
@@ -288,6 +290,9 @@ export default function StorefrontShell({ children }) {
       <div className={`border-b border-makmex-border ${theme === 'light' ? 'bg-makmex-panel/95' : 'bg-black/40'}`}>
         <div className="mx-auto max-w-7xl px-4 py-2 text-center text-xs text-makmex-muted">
           WORK IN PROGRESS
+        </div>
+        <div className="h-0.5 w-full overflow-hidden bg-makmex-border/70">
+          <span className={`loading-line-indicator ${isLoading ? 'is-loading' : ''}`} aria-hidden="true" />
         </div>
       </div>
 

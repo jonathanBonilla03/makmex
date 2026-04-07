@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useLanguage } from "../context/LanguageContext";
+import { useLoadingStatus } from "../context/LoadingContext";
 import { getProducts } from "../lib/supabase";
 
 const REQUEST_TIMEOUT_MS = 20000;
@@ -89,6 +90,7 @@ const showcaseSections = [
 
 export default function HomePage() {
   const { t } = useLanguage();
+  const { startLoading, stopLoading } = useLoadingStatus();
   const [newestProducts, setNewestProducts] = useState([]);
   const [newestPageIndex, setNewestPageIndex] = useState(0);
   const [featuredItemsPerPage, setFeaturedItemsPerPage] = useState(5);
@@ -117,19 +119,28 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    let isActive = true;
+
     async function loadNewestProducts() {
       let result;
+      startLoading();
 
       try {
         result = await withTimeout(getProducts(), "featured products");
       } catch (err) {
         console.error("Featured products load error:", err);
-        setNewestProducts([]);
+        if (isActive) {
+          setNewestProducts([]);
+        }
         return;
+      } finally {
+        stopLoading();
       }
 
       if (!result.success || !result.data) {
-        setNewestProducts([]);
+        if (isActive) {
+          setNewestProducts([]);
+        }
         return;
       }
 
@@ -145,12 +156,18 @@ export default function HomePage() {
         .sort((a, b) => (b.quantity || 0) - (a.quantity || 0))
         .slice(0, NEWEST_MAX_ITEMS);
 
-      setNewestProducts(topStockedWithImages);
-      setNewestPageIndex(0);
+      if (isActive) {
+        setNewestProducts(topStockedWithImages);
+        setNewestPageIndex(0);
+      }
     }
 
     loadNewestProducts();
-  }, []);
+
+    return () => {
+      isActive = false;
+    };
+  }, [startLoading, stopLoading]);
 
   useEffect(() => {
     const updateFeaturedItemsPerPage = () => {
