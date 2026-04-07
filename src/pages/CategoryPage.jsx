@@ -10,6 +10,24 @@ const CONDITION_ORDER = ['AA', 'A', 'B', 'C', 'D', 'E', 'F'];
 const REQUEST_TIMEOUT_MS = 20000;
 const WIDE_VIEW_MIN_WIDTH = 1024;
 
+const getStoredValue = (key) => {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+const setStoredValue = (key, value) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Ignore storage failures in private/restricted environments.
+  }
+};
+
 const getViewportWidth = () => {
   if (typeof window === 'undefined') return WIDE_VIEW_MIN_WIDTH;
   return window.visualViewport?.width || window.innerWidth;
@@ -223,7 +241,7 @@ export default function CategoryPage({ title }) {
   // Sorting
   const [sort, setSort] = useState("relevance");
   const [viewMode, setViewMode] = useState(() => {
-    const saved = localStorage.getItem('makmex-shopping-view-mode');
+    const saved = getStoredValue('makmex-shopping-view-mode');
     return saved === 'standard' ? 'standard' : 'compact';
   });
   const [isWideViewAvailable, setIsWideViewAvailable] = useState(() =>
@@ -311,7 +329,7 @@ export default function CategoryPage({ title }) {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('makmex-shopping-view-mode', viewMode);
+    setStoredValue('makmex-shopping-view-mode', viewMode);
   }, [viewMode]);
 
   useEffect(() => {

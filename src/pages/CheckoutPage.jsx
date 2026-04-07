@@ -137,7 +137,7 @@ export default function CheckoutPage() {
               {items.map((item, index) => (
                 <div key={index} className="flex justify-between items-center p-4 border border-makmex-border rounded-lg bg-makmex-surface">
                   <div>
-                    <h3 className="font-medium text-makmex-text">{item.description}</h3>
+                    <h3 className="font-medium text-makmex-text">{item.name}</h3>
                     <p className="text-sm text-makmex-muted">SKU: {item.display_sku || item.sku}</p>
                     <p className="text-sm text-makmex-muted">Quantity: {item.quantity}</p>
                   </div>

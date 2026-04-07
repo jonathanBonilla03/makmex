@@ -95,6 +95,12 @@ export default function HomePage() {
 
   useEffect(() => {
     const nodes = document.querySelectorAll("[data-reveal]");
+
+    if (typeof window === "undefined" || typeof window.IntersectionObserver !== "function") {
+      nodes.forEach((node) => node.classList.add("is-visible"));
+      return;
+    }
+
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {

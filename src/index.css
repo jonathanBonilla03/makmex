@@ -2,7 +2,13 @@
 @config "../tailwind.config.js";
 
 :root {
-  --app-height: 100dvh;
+  --app-height: 100vh;
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --app-height: 100dvh;
+  }
 }
 
 html,

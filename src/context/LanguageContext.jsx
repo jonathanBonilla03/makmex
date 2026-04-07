@@ -9,9 +9,27 @@ const translations = {
   es
 };
 
+const getStoredValue = (key) => {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+const setStoredValue = (key, value) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Ignore storage failures in private/restricted environments.
+  }
+};
+
 export function LanguageProvider({ children }) {
   const [language, setLanguage] = useState(() => {
-    const savedLanguage = localStorage.getItem('makmex-language');
+    const savedLanguage = getStoredValue('makmex-language');
     if (savedLanguage) {
       return savedLanguage;
     }
@@ -20,16 +38,16 @@ export function LanguageProvider({ children }) {
   
   // Load language preference from localStorage on mount
   useEffect(() => {
-    const savedLanguage = localStorage.getItem('makmex-language');
+    const savedLanguage = getStoredValue('makmex-language');
     if (!savedLanguage || !translations[savedLanguage]) {
-      localStorage.setItem('makmex-language', 'es');
+      setStoredValue('makmex-language', 'es');
     }
   }, []);
   
   const toggleLanguage = () => {
     const newLanguage = language === 'en' ? 'es' : 'en';
     setLanguage(newLanguage);
-    localStorage.setItem('makmex-language', newLanguage);
+    setStoredValue('makmex-language', newLanguage);
   };
   
   const t = (key, params = null) => {

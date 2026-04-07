@@ -11,6 +11,24 @@ const { data: homeLogoImageData } = supabase.storage
 
 const homeLogoImageUrl = homeLogoImageData?.publicUrl || "";
 
+const getStoredValue = (key) => {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+const setStoredValue = (key, value) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Ignore storage failures in private/restricted environments.
+  }
+};
+
 function Icon({ children }) {
   return (
     <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-makmex-border bg-makmex-panel text-makmex-muted">
@@ -162,7 +180,7 @@ export default function StorefrontShell({ children }) {
   const [isCartSidebarOpen, setIsCartSidebarOpen] = useState(false);
   const [isLocationMenuOpen, setIsLocationMenuOpen] = useState(false);
   const [theme, setTheme] = useState(() => {
-    const savedTheme = localStorage.getItem('makmex-theme');
+    const savedTheme = getStoredValue('makmex-theme');
     if (savedTheme === 'light' || savedTheme === 'dark') {
       return savedTheme;
     }
@@ -210,8 +228,12 @@ export default function StorefrontShell({ children }) {
       }
     };
 
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
+    const outsideClickEvent = typeof window !== 'undefined' && 'PointerEvent' in window
+      ? 'pointerdown'
+      : 'mousedown';
+
+    document.addEventListener(outsideClickEvent, handleOutsideClick);
+    return () => document.removeEventListener(outsideClickEvent, handleOutsideClick);
   }, []);
 
   useEffect(() => {
@@ -221,7 +243,7 @@ export default function StorefrontShell({ children }) {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('makmex-theme', theme);
+    setStoredValue('makmex-theme', theme);
   }, [theme]);
 
   const toggleCartSidebar = () => {
