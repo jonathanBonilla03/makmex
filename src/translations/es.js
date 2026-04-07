@@ -27,6 +27,7 @@ export const es = {
   total: "Total",
   item: "artículo",
   items: "artículos",
+  each: "c/u",
   
   // Filters
   filters: "Filtros",

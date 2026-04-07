@@ -6,7 +6,7 @@ import { addCustomer, checkExistingCustomer, createOrder, checkRecentOrders, che
 
 export default function CheckoutPage() {
   const { t, formatPrice } = useLanguage();
-  const { items, getCartTotal, clearCart } = useCart();
+  const { items, getCartTotal, clearCart, removeFromCart, updateQuantity } = useCart();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -134,14 +134,49 @@ export default function CheckoutPage() {
             <p className="text-makmex-muted">{t('yourCartIsEmpty')}</p>
           ) : (
             <div className="space-y-4">
-              {items.map((item, index) => (
-                <div key={index} className="flex justify-between items-center p-4 border border-makmex-border rounded-lg bg-makmex-surface">
-                  <div>
+              {items.map((item) => (
+                <div key={`${item.id}-${item.type}`} className="p-4 border border-makmex-border rounded-lg bg-makmex-surface">
+                  <div className="flex justify-between items-start gap-3">
+                    <div className="min-w-0">
                     <h3 className="font-medium text-makmex-text">{item.name}</h3>
-                    <p className="text-sm text-makmex-muted">SKU: {item.display_sku || item.sku}</p>
-                    <p className="text-sm text-makmex-muted">Quantity: {item.quantity}</p>
+                    <p className="text-sm text-makmex-muted">{t('sku')}: {item.display_sku || item.sku}</p>
+                      <p className="text-sm text-makmex-muted">{formatPrice(item.price)} {t('each')}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeFromCart(item.id, item.type)}
+                      className="text-red-500 hover:text-red-700 text-sm"
+                    >
+                      🗑️
+                    </button>
                   </div>
-                  <p className="font-medium text-makmex-text">{formatPrice(item.price * item.quantity)}</p>
+
+                  <div className="mt-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => updateQuantity(item.id, item.type, item.quantity - 1)}
+                        className="w-7 h-7 rounded bg-makmex-border text-makmex-text hover:bg-makmex-orange"
+                      >
+                        −
+                      </button>
+                      <span className="text-sm w-8 text-center text-makmex-text">{item.quantity}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (item.quantity < item.available_quantity) {
+                            updateQuantity(item.id, item.type, item.quantity + 1);
+                          }
+                        }}
+                        className="w-7 h-7 rounded bg-makmex-border text-makmex-text hover:bg-makmex-orange disabled:opacity-50"
+                        disabled={item.quantity >= item.available_quantity}
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    <p className="font-medium text-makmex-text">{formatPrice(item.price * item.quantity)}</p>
+                  </div>
                 </div>
               ))}
               

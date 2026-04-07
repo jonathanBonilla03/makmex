@@ -6,6 +6,9 @@ import { useLoadingStatus } from "../context/LoadingContext";
 
 const REQUEST_TIMEOUT_MS = 20000;
 const BRAND_IMAGE_EXTENSIONS = ["webp", "avif", "jpg", "jpeg", "png"];
+const BRAND_IMAGE_ALIASES = {
+  husky: ["Husky", "husky", "HUSKY"]
+};
 
 const { data: brandsHeroImageData } = supabase.storage
   .from("web-images")
@@ -39,11 +42,46 @@ const getItemBrands = (item) => {
   return values;
 };
 
+const normalizeBrandSlug = (value) =>
+  String(value || "")
+    .trim()
+    .replace(/\s+/g, "-");
+
+const normalizeBrandUnderscore = (value) =>
+  String(value || "")
+    .trim()
+    .replace(/\s+/g, "_");
+
 const buildBrandImageCandidates = (brandName) => {
   const trimmed = String(brandName || "").trim();
   if (!trimmed) return [];
 
-  return BRAND_IMAGE_EXTENSIONS.map((extension) => `brands-page/${trimmed}.${extension}`);
+  const lower = trimmed.toLowerCase();
+  const upper = trimmed.toUpperCase();
+  const slug = normalizeBrandSlug(trimmed);
+  const slugLower = slug.toLowerCase();
+  const slugUpper = slug.toUpperCase();
+  const underscored = normalizeBrandUnderscore(trimmed);
+  const underscoredLower = underscored.toLowerCase();
+  const aliasVariants = BRAND_IMAGE_ALIASES[lower] || [];
+
+  const nameVariants = Array.from(
+    new Set([
+      ...aliasVariants,
+      trimmed,
+      lower,
+      upper,
+      slug,
+      slugLower,
+      slugUpper,
+      underscored,
+      underscoredLower
+    ].filter(Boolean))
+  );
+
+  return nameVariants.flatMap((nameVariant) =>
+    BRAND_IMAGE_EXTENSIONS.map((extension) => `brands-page/${nameVariant}.${extension}`)
+  );
 };
 
 const getPublicStorageUrl = (path) => {
@@ -58,10 +96,11 @@ const buildBrandImageUrls = (brandName) =>
 
 function BrandCard({ brand, t }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [hasImageError, setHasImageError] = useState(false);
   const imageUrls = brand.image_urls || [];
   const activeImageUrl = imageUrls[currentImageIndex] || "";
 
-  if (!activeImageUrl) return null;
+  const showImage = Boolean(activeImageUrl) && !hasImageError;
 
   return (
     <Link
@@ -70,22 +109,31 @@ function BrandCard({ brand, t }) {
       className="group relative aspect-square w-full overflow-hidden rounded-2xl border border-makmex-border bg-white shadow-card transition duration-300 hover:-translate-y-1 hover:border-makmex-orange/60"
     >
       <div className="absolute inset-0 bg-white" />
-      <img
-        src={activeImageUrl}
-        alt={brand.name}
-        loading="lazy"
-        decoding="async"
-        fetchPriority="low"
-        className="relative z-10 h-full w-full object-contain p-3 transition duration-500 group-hover:scale-105"
-        onError={() => {
-          setCurrentImageIndex((prev) => {
-            if (prev >= imageUrls.length - 1) {
-              return prev;
-            }
-            return prev + 1;
-          });
-        }}
-      />
+      {showImage ? (
+        <img
+          src={activeImageUrl}
+          alt={brand.name}
+          loading="lazy"
+          decoding="async"
+          fetchPriority="low"
+          className="relative z-10 h-full w-full object-contain p-3 transition duration-500 group-hover:scale-105"
+          onError={() => {
+            setCurrentImageIndex((prev) => {
+              if (prev >= imageUrls.length - 1) {
+                setHasImageError(true);
+                return prev;
+              }
+              return prev + 1;
+            });
+          }}
+        />
+      ) : (
+        <div className="relative z-10 flex h-full w-full items-center justify-center p-3 text-center">
+          <span className="rounded-xl border border-black/15 bg-black/5 px-4 py-2 text-sm font-semibold text-black/70">
+            {brand.name}
+          </span>
+        </div>
+      )}
 
       <div className="absolute inset-x-0 bottom-0 z-20 border-t border-black/10 bg-white/95 p-3 sm:p-4 backdrop-blur-[1px]">
         <h2 className="text-base sm:text-lg font-extrabold text-black">{brand.name}</h2>

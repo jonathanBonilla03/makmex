@@ -76,12 +76,23 @@ function CartSidebar({ isOpen, onClose }) {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-makmex-border p-4">
           <h2 className="text-lg font-semibold text-makmex-text">{t('cart')}</h2>
-          <button 
-            onClick={onClose}
-            className="text-makmex-muted hover:text-makmex-text text-xl"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-2">
+            {items.length > 0 && (
+              <Link
+                to="/checkout"
+                onClick={onClose}
+                className="rounded-md bg-makmex-orange px-3 py-1.5 text-xs font-semibold text-black hover:bg-makmex-ember sm:hidden"
+              >
+                {t('checkout')}
+              </Link>
+            )}
+            <button 
+              onClick={onClose}
+              className="text-makmex-muted hover:text-makmex-text text-xl"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Cart Items */}
@@ -165,6 +176,7 @@ function CartSidebar({ isOpen, onClose }) {
             </div>
             <Link 
               to="/checkout"
+              onClick={onClose}
               className="w-full bg-makmex-orange text-black font-semibold py-3 rounded-lg hover:bg-makmex-ember text-center block"
             >
               {t('checkout')}

@@ -27,6 +27,7 @@ export const en = {
   total: "Total",
   item: "item",
   items: "items",
+  each: "each",
   
   // Filters
   filters: "Filters",
