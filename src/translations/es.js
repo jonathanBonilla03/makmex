@@ -156,6 +156,14 @@ export const es = {
   contactEmail: "Correo",
   contactHours: "Horario",
   contactHoursValue: "Lun - Sáb • 9:00 AM - 7:00 PM",
+  contactNoAddress: "No hay dirección disponible",
+  contactNoPhone: "No hay teléfono disponible",
+  contactViewOnMap: "Ver en mapa",
+  contactGetDirections: "Cómo llegar",
+  contactOpenInGoogleMaps: "Abrir en Google Maps",
+  contactMapTitle: "Mapa de {location}",
+  contactLoadError: "No se pudieron cargar las ubicaciones de contacto.",
+  contactLoadTimeout: "Las ubicaciones de contacto tardaron demasiado en cargar. Inténtalo de nuevo.",
   
   // Checkout
   checkout: "Finalizar Compra",

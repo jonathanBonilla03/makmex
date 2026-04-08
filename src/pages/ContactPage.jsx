@@ -10,6 +10,8 @@ const { data: contactHeroImageData } = supabase.storage
   .getPublicUrl("home-page/Tool-Showcase-CloseUp-2.jpg");
 
 const contactHeroImageUrl = contactHeroImageData?.publicUrl || "";
+const CONTACT_LOAD_ERROR_KEY = "contactLoadError";
+const CONTACT_TIMEOUT_ERROR_KEY = "contactLoadTimeout";
 
 const withTimeout = (promise, label) =>
   Promise.race([
@@ -91,7 +93,12 @@ export default function ContactPage() {
         }
       } catch (err) {
         if (isActive) {
-          setError(err.message || "Failed to load contact locations");
+          const isTimeout =
+            err &&
+            typeof err.message === "string" &&
+            err.message.toLowerCase().includes("timed out");
+
+          setError(isTimeout ? CONTACT_TIMEOUT_ERROR_KEY : CONTACT_LOAD_ERROR_KEY);
           setLocations([]);
           setSelectedLocation(null);
         }
@@ -129,8 +136,8 @@ export default function ContactPage() {
         </section>
 
         {error && (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            {error}
+          <div className="rounded-2xl border border-makmex-border bg-makmex-panel p-4 text-sm text-makmex-text">
+            {t(error)}
           </div>
         )}
 
@@ -177,7 +184,7 @@ export default function ContactPage() {
                       <div className="mt-5 space-y-4 text-sm text-makmex-muted">
                         <p>
                           <span className="font-semibold text-makmex-text">{t("contactAddress")}: </span>
-                          {location.address || "No address available"}
+                          {location.address || t("contactNoAddress")}
                         </p>
 
                         <p>
@@ -190,7 +197,7 @@ export default function ContactPage() {
                               {location.phone}
                             </a>
                           ) : (
-                            "No phone available"
+                            t("contactNoPhone")
                           )}
                         </p>
 
@@ -219,16 +226,16 @@ export default function ContactPage() {
                         onClick={() => setSelectedLocation(location)}
                         className="inline-flex items-center rounded-xl border border-makmex-border px-4 py-2 text-sm font-semibold text-makmex-text transition hover:border-makmex-primary hover:text-makmex-primary"
                       >
-                        View on map
+                        {t("contactViewOnMap")}
                       </button>
 
                       <a
                         href={mapsUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center rounded-xl bg-makmex-primary px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90"
+                        className="inline-flex items-center rounded-xl bg-makmex-primary px-4 py-2 text-sm font-semibold text-makmex-text transition hover:opacity-90"
                       >
-                        Get directions
+                        {t("contactGetDirections")}
                       </a>
                     </div>
                   </article>
@@ -244,7 +251,7 @@ export default function ContactPage() {
                       {selectedLocation.name || selectedLocation.id}
                     </h3>
                     <p className="text-sm text-makmex-muted">
-                      {selectedLocation.address || "No address available"}
+                      {selectedLocation.address || t("contactNoAddress")}
                     </p>
                   </div>
 
@@ -252,15 +259,17 @@ export default function ContactPage() {
                     href={buildMapsSearchUrl(selectedLocation)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center rounded-xl bg-makmex-primary px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90"
+                    className="inline-flex items-center rounded-xl bg-makmex-primary px-4 py-2 text-sm font-semibold text-makmex-text transition hover:opacity-90"
                   >
-                    Open in Google Maps
+                    {t("contactOpenInGoogleMaps")}
                   </a>
                 </div>
 
                 <div className="h-[360px] w-full md:h-[420px]">
                   <iframe
-                    title={`${selectedLocation.name || selectedLocation.id} map`}
+                    title={t("contactMapTitle", {
+                      location: selectedLocation.name || selectedLocation.id || "Makmex"
+                    })}
                     src={selectedMapUrl}
                     className="h-full w-full"
                     loading="lazy"
