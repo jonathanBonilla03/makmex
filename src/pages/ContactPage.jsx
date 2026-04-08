@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useLanguage } from "../context/LanguageContext";
 import { useLoadingStatus } from "../context/LoadingContext";
@@ -15,22 +15,25 @@ const withTimeout = (promise, label) =>
   Promise.race([
     promise,
     new Promise((_, reject) => {
-      window.setTimeout(() => reject(new Error(`${label} request timed out`)), REQUEST_TIMEOUT_MS);
+      setTimeout(() => reject(new Error(`${label} request timed out`)), REQUEST_TIMEOUT_MS);
     })
   ]);
 
-function buildPlaceholderContact(locationName, index) {
-  const numberSuffix = String(index + 1).padStart(2, "0");
-  return {
-    phone: `+52 (55) 5555-55${numberSuffix}`,
-    email: `contact.${locationName.toLowerCase().replace(/\s+/g, "-")}@makmex.mx`
-  };
+function buildMapsSearchUrl(location) {
+  const query = encodeURIComponent(location.address || location.name || location.id || "Makmex");
+  return `https://www.google.com/maps/search/?api=1&query=${query}`;
+}
+
+function buildEmbedMapUrl(location) {
+  const query = encodeURIComponent(location.address || location.name || location.id || "Makmex");
+  return `https://www.google.com/maps?q=${query}&z=12&output=embed`;
 }
 
 export default function ContactPage() {
   const { t } = useLanguage();
   const { startLoading, stopLoading } = useLoadingStatus();
   const [locations, setLocations] = useState([]);
+  const [selectedLocation, setSelectedLocation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -44,7 +47,10 @@ export default function ContactPage() {
 
       try {
         const { data, error: warehouseError } = await withTimeout(
-          supabase.from("warehouse").select("id, name, address").order("name", { ascending: true }),
+          supabase
+            .from("warehouse")
+            .select('id, name, address, phone, email')
+            .order("id", { ascending: true }),
           "warehouse"
         );
 
@@ -53,19 +59,41 @@ export default function ContactPage() {
         }
 
         const fallbackLocations = [
-          { id: "CDMX", name: "Mexico City", address: "Placeholder Address 101, Mexico City" },
-          { id: "GDL", name: "Guadalajara", address: "Placeholder Address 202, Guadalajara" },
-          { id: "MTY", name: "Monterrey", address: "Placeholder Address 303, Monterrey" }
+          {
+            id: "CDMX",
+            name: "CDMX",
+            address: "Ciudad de Mexico",
+            phone: "8484990393",
+            email: ""
+          },
+          {
+            id: "CEDIS",
+            name: "CEDIS",
+            address: "Chihuahua",
+            phone: "+52 614 366 0847",
+            email: ""
+          },
+          {
+            id: "DENMOR",
+            name: "DENMOR",
+            address: "Monterrey",
+            phone: "646474839",
+            email: ""
+          }
         ];
 
         const source = data && data.length > 0 ? data : fallbackLocations;
+
         if (isActive) {
-          setLocations(source.slice(0, 3));
+          const trimmed = source.slice(0, 3);
+          setLocations(trimmed);
+          setSelectedLocation(trimmed[0] || null);
         }
       } catch (err) {
         if (isActive) {
           setError(err.message || "Failed to load contact locations");
           setLocations([]);
+          setSelectedLocation(null);
         }
       } finally {
         if (isActive) {
@@ -82,69 +110,168 @@ export default function ContactPage() {
     };
   }, [startLoading, stopLoading]);
 
+  const selectedMapUrl = useMemo(() => {
+    if (!selectedLocation) return "";
+    return buildEmbedMapUrl(selectedLocation);
+  }, [selectedLocation]);
+
   return (
-    <div className="space-y-8 pb-12">
-      <section
-        className="relative overflow-hidden rounded-3xl border border-makmex-border bg-cover bg-center bg-no-repeat p-8 md:p-12"
-        style={{
-          backgroundImage: `linear-gradient(120deg, rgba(7, 7, 9, 0.76), rgba(7, 7, 9, 0.56)), url(${contactHeroImageUrl})`
-        }}
-      >
-        <h1 className="text-4xl font-extrabold text-white md:text-5xl">{t("contactPageTitle")}</h1>
-        <p className="mt-3 max-w-3xl text-sm text-slate-200 md:text-base">{t("contactPageSubtitle")}</p>
-      </section>
-
-      {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
-      )}
-
-      {loading ? (
-        <div className="grid gap-4 grid-cols-1 sm:gap-6 md:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, index) => (
-            <div key={index} className="rounded-2xl border border-makmex-border bg-makmex-panel p-6">
-              <div className="h-6 w-1/2 animate-pulse rounded bg-makmex-border/50" />
-              <div className="mt-5 space-y-3">
-                <div className="h-4 w-4/5 animate-pulse rounded bg-makmex-border/40" />
-                <div className="h-4 w-3/4 animate-pulse rounded bg-makmex-border/40" />
-                <div className="h-4 w-2/3 animate-pulse rounded bg-makmex-border/40" />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <section className="grid gap-4 grid-cols-1 sm:gap-6 md:grid-cols-3">
-          {locations.map((location, index) => {
-            const contact = buildPlaceholderContact(location.name || location.id || "store", index);
-
-            return (
-              <article
-                key={location.id || `${location.name}-${index}`}
-                className="rounded-2xl border border-makmex-border bg-makmex-panel p-4 shadow-card sm:p-6"
-              >
-                <h2 className="text-xl font-extrabold text-makmex-text sm:text-2xl">{location.name || location.id}</h2>
-                <div className="mt-3 space-y-2 text-xs text-makmex-muted sm:mt-5 sm:space-y-3 sm:text-sm">
-                  <p>
-                    <span className="font-semibold text-makmex-text">{t("contactAddress")}: </span>
-                    {location.address || "Placeholder Address"}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-makmex-text">{t("contactPhone")}: </span>
-                    {contact.phone}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-makmex-text">{t("contactEmail")}: </span>
-                    {contact.email}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-makmex-text">{t("contactHours")}: </span>
-                    {t("contactHoursValue")}
-                  </p>
-                </div>
-              </article>
-            );
-          })}
+    <div className="pb-12">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 sm:px-6 lg:px-8">
+        <section
+          className="relative overflow-hidden rounded-3xl border border-makmex-border bg-cover bg-center bg-no-repeat px-8 py-10 md:px-12 md:py-14"
+          style={{
+            backgroundImage: `linear-gradient(120deg, rgba(7, 7, 9, 0.76), rgba(7, 7, 9, 0.56)), url(${contactHeroImageUrl})`
+          }}
+        >
+          <h1 className="text-4xl font-extrabold text-white md:text-5xl">{t("contactPageTitle")}</h1>
+          <p className="mt-3 max-w-3xl text-sm text-slate-200 md:text-base">{t("contactPageSubtitle")}</p>
         </section>
-      )}
+
+        {error && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-6 md:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div
+                key={index}
+                className="min-h-[260px] rounded-3xl border border-makmex-border bg-makmex-panel p-6 shadow-card"
+              >
+                <div className="h-7 w-1/2 animate-pulse rounded bg-makmex-border/50" />
+                <div className="mt-6 space-y-4">
+                  <div className="h-4 w-4/5 animate-pulse rounded bg-makmex-border/40" />
+                  <div className="h-4 w-3/4 animate-pulse rounded bg-makmex-border/40" />
+                  <div className="h-4 w-2/3 animate-pulse rounded bg-makmex-border/40" />
+                  <div className="h-10 w-32 animate-pulse rounded-xl bg-makmex-border/40" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            <section className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-6 md:grid-cols-3">
+              {locations.map((location, index) => {
+                const hasPhone = location.phone && String(location.phone).trim();
+                const hasEmail = location.email && String(location.email).trim();
+                const mapsUrl = buildMapsSearchUrl(location);
+                const isSelected =
+                  selectedLocation &&
+                  (selectedLocation.id === location.id || selectedLocation.name === location.name);
+
+                return (
+                  <article
+                    key={location.id || `${location.name}-${index}`}
+                    className={`flex min-h-[290px] flex-col rounded-3xl border bg-makmex-panel p-6 shadow-card transition hover:-translate-y-0.5 hover:shadow-lg ${
+                      isSelected ? "border-makmex-primary ring-1 ring-makmex-primary/30" : "border-makmex-border"
+                    }`}
+                  >
+                    <div className="flex-1">
+                      <h2 className="text-2xl font-extrabold text-makmex-text">
+                        {location.name || location.id}
+                      </h2>
+
+                      <div className="mt-5 space-y-4 text-sm text-makmex-muted">
+                        <p>
+                          <span className="font-semibold text-makmex-text">{t("contactAddress")}: </span>
+                          {location.address || "No address available"}
+                        </p>
+
+                        <p>
+                          <span className="font-semibold text-makmex-text">{t("contactPhone")}: </span>
+                          {hasPhone ? (
+                            <a
+                              href={`tel:${location.phone}`}
+                              className="font-medium text-makmex-text transition hover:text-makmex-primary hover:underline"
+                            >
+                              {location.phone}
+                            </a>
+                          ) : (
+                            "No phone available"
+                          )}
+                        </p>
+
+                        {hasEmail && (
+                          <p>
+                            <span className="font-semibold text-makmex-text">{t("contactEmail")}: </span>
+                            <a
+                              href={`mailto:${location.email}`}
+                              className="font-medium text-makmex-text transition hover:text-makmex-primary hover:underline"
+                            >
+                              {location.email}
+                            </a>
+                          </p>
+                        )}
+
+                        <p>
+                          <span className="font-semibold text-makmex-text">{t("contactHours")}: </span>
+                          {t("contactHoursValue")}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedLocation(location)}
+                        className="inline-flex items-center rounded-xl border border-makmex-border px-4 py-2 text-sm font-semibold text-makmex-text transition hover:border-makmex-primary hover:text-makmex-primary"
+                      >
+                        View on map
+                      </button>
+
+                      <a
+                        href={mapsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center rounded-xl bg-makmex-primary px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90"
+                      >
+                        Get directions
+                      </a>
+                    </div>
+                  </article>
+                );
+              })}
+            </section>
+
+            {selectedLocation && selectedMapUrl && (
+              <section className="mx-auto w-full max-w-6xl overflow-hidden rounded-3xl border border-makmex-border bg-makmex-panel shadow-card">
+                <div className="flex flex-col gap-2 border-b border-makmex-border px-6 py-5 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <h3 className="text-xl font-extrabold text-makmex-text">
+                      {selectedLocation.name || selectedLocation.id}
+                    </h3>
+                    <p className="text-sm text-makmex-muted">
+                      {selectedLocation.address || "No address available"}
+                    </p>
+                  </div>
+
+                  <a
+                    href={buildMapsSearchUrl(selectedLocation)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center rounded-xl bg-makmex-primary px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90"
+                  >
+                    Open in Google Maps
+                  </a>
+                </div>
+
+                <div className="h-[360px] w-full md:h-[420px]">
+                  <iframe
+                    title={`${selectedLocation.name || selectedLocation.id} map`}
+                    src={selectedMapUrl}
+                    className="h-full w-full"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                  />
+                </div>
+              </section>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
