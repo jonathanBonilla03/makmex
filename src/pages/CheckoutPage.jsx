@@ -1,8 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from "../context/LanguageContext";
 import { useCart } from "../context/CartContext";
-import { addCustomer, checkExistingCustomer, createOrder, checkRecentOrders, checkDuplicateOrder } from "../lib/supabase";
+import { 
+  checkExistingCustomer, 
+  addCustomer, 
+  checkRecentOrders, 
+  checkDuplicateOrder, 
+  createOrder 
+} from "../lib/supabase";
 
 export default function CheckoutPage() {
   const { t, formatPrice } = useLanguage();
@@ -65,16 +71,22 @@ export default function CheckoutPage() {
         customer = customerResult.data;
       }
 
-      // Check for recent orders (spam protection - 1 order per day)
+      // Check for recent orders (spam protection - 3 orders per day)
       const recentOrderCheck = await checkRecentOrders(customer.id);
       if (!recentOrderCheck.success) {
         alert(`${t('errorCheckingOrderHistory')}: ${recentOrderCheck.error}`);
         return;
       }
 
+      if (recentOrderCheck.hasExcessiveAttempts) {
+        // Alert for 5+ order attempts
+        alert(`${t('excessiveAttemptsWarning')} ${recentOrderCheck.orderCount} ${t('ordersToday')}. ${t('excessiveAttemptsMessage')}`);
+        return;
+      }
+
       if (recentOrderCheck.hasRecentOrder) {
         const orderTime = new Date(recentOrderCheck.recentOrderTime).toLocaleString();
-        alert(`${t('alreadyPlacedOrder')} ${orderTime}. ${t('oneOrderPerDay')}`);
+        alert(`${t('alreadyPlacedOrder')} ${orderTime}. ${t('threeOrdersPerDay')}`);
         return;
       }
 
@@ -109,8 +121,17 @@ export default function CheckoutPage() {
       if (orderResult.success) {
         // Clear cart after successful order
         clearCart();
-        // Redirect to success page
-        navigate('/order-success');
+        // Redirect to success page with order details
+        navigate('/order-success', {
+          state: {
+            orderNumber: orderResult.data.order_number || 'N/A',
+            orderDate: new Date().toLocaleDateString(),
+            customerName: customer.name,
+            customerEmail: customer.email,
+            total: getCartTotal(),
+            itemCount: items.length
+          }
+        });
       } else {
         alert(`${t('errorCreatingOrder')}: ${orderResult.error}`);
       }

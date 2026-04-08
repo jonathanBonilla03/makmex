@@ -763,9 +763,10 @@ export async function getKits() {
 }
 
 /**
- * Check if customer has recent orders (to prevent spam)
+ * Check if customer has reached the daily order limit (3 orders per day)
+ * Also tracks if customer has attempted 5+ orders for alert purposes
  * @param {string} customerId - Customer UUID
- * @returns {Promise<{success: boolean, hasRecentOrder: boolean, error?: string}>}
+ * @returns {Promise<{success: boolean, hasRecentOrder: boolean, hasExcessiveAttempts: boolean, error?: string}>}
  */
 export async function checkRecentOrders(customerId) {
   try {
@@ -777,24 +778,27 @@ export async function checkRecentOrders(customerId) {
       .select('id, created_at')
       .eq('customer_id', customerId)
       .gte('created_at', twentyFourHoursAgo)
-      .order('created_at', { ascending: false })
-      .limit(1);
+      .order('created_at', { ascending: false });
 
     if (error) {
       console.error('Error checking recent orders:', error);
-      return { success: false, error: error.message, hasRecentOrder: false };
+      return { success: false, error: error.message, hasRecentOrder: false, hasExcessiveAttempts: false };
     }
 
-    const hasRecentOrder = data && data.length > 0;
+    const orderCount = data ? data.length : 0;
+    const hasRecentOrder = orderCount >= 3; // Block at 3 orders
+    const hasExcessiveAttempts = orderCount >= 5; // Alert at 5+ orders
     
     return { 
       success: true, 
       hasRecentOrder,
-      recentOrderTime: hasRecentOrder ? data[0].created_at : null
+      hasExcessiveAttempts,
+      recentOrderTime: hasRecentOrder ? data[0].created_at : null,
+      orderCount
     };
   } catch (err) {
     console.error('Unexpected error checking recent orders:', err);
-    return { success: false, error: err.message, hasRecentOrder: false };
+    return { success: false, error: err.message, hasRecentOrder: false, hasExcessiveAttempts: false };
   }
 }
 
