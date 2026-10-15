@@ -36,7 +36,7 @@ A modern e-commerce web application for power tools built with React, Vite, and 
    - Copy the project URL and anon/public key
 
 4. **Configure environment variables**
-   Edit .env with your actual Supabase credentials
+   Copy `.env.example` to `.env` and add your Supabase credentials
    VITE_SUPABASE_URL=https://your-project-ref.supabase.co
    VITE_SUPABASE_ANON_KEY=your-anon-key-here
 
@@ -58,6 +58,8 @@ A modern e-commerce web application for power tools built with React, Vite, and 
 4. **Replace Mock Data**: Update `CategoryPage.jsx` to use real Supabase queries
 
 ### Database Schema
+
+> The full, current schema, views, and security rules are documented in [`/database`](database/README.md). The snippet below is the original early schema.
 
 #### Your Current Schema:
 ```sql

@@ -27,3 +27,9 @@ development
 \.vite
 .vite/
 .vite/deps/
+
+# Environment and local tooling (never commit)
+.env
+.env.*
+!.env.example
+.vercel/
