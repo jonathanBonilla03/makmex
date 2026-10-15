@@ -6,6 +6,57 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
+// Supabase (PostgREST) returns at most 1,000 rows per request. The catalog has
+// 13,000+ products and 10,000+ kit availability rows, so single requests were
+// silently truncated. These helpers read results completely.
+const PAGE_SIZE = 1000
+const ID_CHUNK_SIZE = 150 // keeps `.in()` request URLs well under length limits
+
+/**
+ * Read every row of a query by paging through it.
+ * @param {() => any} buildQuery - returns a fresh, deterministically ordered query
+ */
+async function fetchAllRows(buildQuery) {
+  const rows = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await buildQuery().range(from, from + PAGE_SIZE - 1)
+    if (error) return { data: null, error }
+    rows.push(...(data || []))
+    if (!data || data.length < PAGE_SIZE) return { data: rows, error: null }
+  }
+}
+
+/**
+ * Read rows whose `column` matches any of `ids`, in parallel chunks.
+ * @param {() => any} buildQuery - returns a fresh, deterministically ordered query
+ * @param {string} column - column to filter on
+ * @param {string[]} ids - values to match
+ */
+async function fetchByIds(buildQuery, column, ids) {
+  const unique = [...new Set(ids)].filter(id => id !== null && id !== undefined)
+  const chunks = []
+  for (let i = 0; i < unique.length; i += ID_CHUNK_SIZE) {
+    chunks.push(unique.slice(i, i + ID_CHUNK_SIZE))
+  }
+  const results = await Promise.all(
+    chunks.map(chunk => fetchAllRows(() => buildQuery().in(column, chunk)))
+  )
+  const failed = results.find(result => result.error)
+  if (failed) return { data: null, error: failed.error }
+  return { data: results.flatMap(result => result.data), error: null }
+}
+
+/** Group rows into a map of key -> rows[], sorting each group by `sort_order` when present. */
+function groupBy(rows, key) {
+  const map = {}
+  ;(rows || []).forEach(row => {
+    if (!map[row[key]]) map[row[key]] = []
+    map[row[key]].push(row)
+  })
+  Object.values(map).forEach(group => group.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)))
+  return map
+}
+
 /**
  * Get public URLs for product images
  * @param {Array} productImages - Array of product images with path and bucket
@@ -64,8 +115,9 @@ export async function getProducts() {
   try {
     console.log('Fetching products from Supabase...')
     
-    // Fetch products, prices, and images in parallel
-    const [productsResult, pricesResult, imagesResult] = await Promise.all([
+    // Only in-stock products are shown, so filter on the server and page
+    // through the results (a single request is capped at 1,000 rows).
+    const productsResult = await fetchAllRows(() =>
       supabase
         .from('products')
         .select(`
@@ -90,27 +142,37 @@ export async function getProducts() {
             id,
             name
           ),
-          inventory (
+          inventory!inner (
             id,
             quantity,
             warehouse_location,
             last_updated
           )
-        `),
-      supabase
-        .from('prices')
-        .select('product_id, price_aa, created_at')
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('product_images')
-        .select('id, product_id, bucket, path, sort_order, is_primary')
-        .order('sort_order')
-    ])
+        `)
+        .gt('inventory.quantity', 0)
+        .order('id')
+    )
 
     if (productsResult.error) {
       console.error('Products query error:', productsResult.error)
       return { success: false, error: productsResult.error.message }
     }
+
+    const productIds = productsResult.data.map(product => product.id)
+
+    // Prices come from the product_price view: latest base price x condition multiplier.
+    const [pricesResult, imagesResult] = await Promise.all([
+      fetchByIds(
+        () => supabase.from('product_price').select('product_id, price').order('product_id'),
+        'product_id',
+        productIds
+      ),
+      fetchByIds(
+        () => supabase.from('product_images').select('id, product_id, bucket, path, sort_order, is_primary').order('id'),
+        'product_id',
+        productIds
+      )
+    ])
 
     if (pricesResult.error) {
       console.error('Prices query error:', pricesResult.error)
@@ -122,27 +184,12 @@ export async function getProducts() {
       // Continue without images rather than failing completely
     }
 
-    // Create a map of product prices (most recent price for each product)
     const priceMap = {}
-    if (pricesResult.data) {
-      pricesResult.data.forEach(price => {
-        if (!priceMap[price.product_id] || 
-            new Date(price.created_at) > new Date(priceMap[price.product_id].created_at)) {
-          priceMap[price.product_id] = price
-        }
-      })
-    }
+    pricesResult.data.forEach(row => {
+      priceMap[row.product_id] = row.price === null ? null : Number(row.price)
+    })
 
-    // Create a map of product images
-    const imageMap = {}
-    if (imagesResult.data) {
-      imagesResult.data.forEach(image => {
-        if (!imageMap[image.product_id]) {
-          imageMap[image.product_id] = []
-        }
-        imageMap[image.product_id].push(image)
-      })
-    }
+    const imageMap = groupBy(imagesResult.data, 'product_id')
 
     // Process signed URLs for all images
     const processedImageMap = {}
@@ -182,9 +229,8 @@ export async function getProducts() {
         }
       }
 
-      // Get actual price from database or fallback to mock
-      const actualPrice = priceMap[product.id]?.price_aa
-      const price = actualPrice || (Math.floor(Math.random() * 300 + 50) + 0.99)
+      // Selling price from the database; null when the product has no valid price
+      const price = priceMap[product.id] ?? null
       
       // Get product images
       const productImages = processedImageMap[product.id] || []
@@ -219,8 +265,8 @@ export async function getProducts() {
       }
     })
 
-    // Only return products that are in stock
-    const inStockProducts = transformedData.filter(product => product.in_stock)
+    // Only return products that are in stock and have a price
+    const inStockProducts = transformedData.filter(product => product.in_stock && product.price !== null)
 
     return { success: true, data: inStockProducts }
   } catch (err) {
@@ -238,7 +284,7 @@ export async function getCombos() {
     console.log('Fetching combos from Supabase...')
     
     // Fetch combos data
-    const combosResult = await supabase
+    const combosResult = await fetchAllRows(() => supabase
       .from('combos')
       .select(`
         id,
@@ -273,29 +319,37 @@ export async function getCombos() {
           )
         )
       `)
+      .order('id'))
 
     if (combosResult.error) {
       console.error('Combos query error:', combosResult.error)
       return { success: false, error: combosResult.error.message }
     }
 
-    // Try to fetch availability data
-    let availabilityData = []
-    try {
-      const availabilityResult = await supabase
+    // Availability and prices come from the combo_availability and combo_price_calc views
+    const [availabilityResult, comboPricesResult] = await Promise.all([
+      fetchAllRows(() => supabase
         .from('combo_availability')
-        .select(`
-          combo_id,
-          warehouse_location,
-          max_combos_available
-        `)
-      
-      if (!availabilityResult.error) {
-        availabilityData = availabilityResult.data || []
-      }
-    } catch (err) {
-      console.warn('Combo availability table might not exist:', err.message)
+        .select('combo_id, warehouse_location, max_combos_available')
+        .gt('max_combos_available', 0)
+        .order('combo_id')
+        .order('warehouse_location')),
+      fetchAllRows(() => supabase
+        .from('combo_price_calc')
+        .select('combo_id, combo_price')
+        .order('combo_id'))
+    ])
+
+    if (availabilityResult.error) {
+      console.error('Combo availability query error:', availabilityResult.error)
+      return { success: false, error: availabilityResult.error.message }
     }
+
+    const availabilityData = availabilityResult.data
+    const comboPriceMap = {}
+    ;(comboPricesResult.data || []).forEach(row => {
+      comboPriceMap[row.combo_id] = row.combo_price === null ? null : Number(row.combo_price)
+    })
 
     // Create a map of availability data by combo_id
     const availabilityMap = {}
@@ -318,20 +372,14 @@ export async function getCombos() {
     // Fetch product images only for first combo item products.
     let productImagesMap = {}
     if (firstProductIds.size > 0) {
-      const imagesResult = await supabase
-        .from('product_images')
-        .select('id, product_id, bucket, path, sort_order, is_primary')
-        .in('product_id', Array.from(firstProductIds))
-        .order('sort_order')
+      const imagesResult = await fetchByIds(
+        () => supabase.from('product_images').select('id, product_id, bucket, path, sort_order, is_primary').order('id'),
+        'product_id',
+        Array.from(firstProductIds)
+      )
 
       if (imagesResult.data) {
-        const imageMap = {}
-        imagesResult.data.forEach(image => {
-          if (!imageMap[image.product_id]) {
-            imageMap[image.product_id] = []
-          }
-          imageMap[image.product_id].push(image)
-        })
+        const imageMap = groupBy(imagesResult.data, 'product_id')
 
         // Process signed URLs for all images
         for (const [productId, images] of Object.entries(imageMap)) {
@@ -351,8 +399,8 @@ export async function getCombos() {
       // Get primary warehouse
       const primaryAvailability = comboAvailability.find(avail => avail.max_combos_available > 0) || comboAvailability[0]
       
-      // Get combo price
-      const comboPrice = Math.floor(Math.random() * 800 + 200) + 0.99
+      // Combo price from the database; null when a component has no valid price
+      const comboPrice = comboPriceMap[combo.id] ?? null
       
       // Determine overall condition from combo items
       let overallCondition = 'New'
@@ -456,7 +504,7 @@ export async function getCombos() {
     })
 
     // Only return combos that are in stock
-    const inStockCombos = transformedData.filter(combo => combo.in_stock)
+    const inStockCombos = transformedData.filter(combo => combo.in_stock && combo.price !== null)
 
     return { success: true, data: inStockCombos }
   } catch (err) {
@@ -474,7 +522,23 @@ export async function getKits() {
     console.log('Fetching kits from Supabase...')
     
     // Fetch kits data
-    const kitsResult = await supabase
+    // Only kits that can be assembled somewhere are shown, so start from availability
+    const availabilityResult = await fetchAllRows(() => supabase
+      .from('kit_availability')
+      .select('kit_id, warehouse_location, max_kits_available')
+      .gt('max_kits_available', 0)
+      .order('kit_id')
+      .order('warehouse_location'))
+
+    if (availabilityResult.error) {
+      console.error('Kit availability query error:', availabilityResult.error)
+      return { success: false, error: availabilityResult.error.message }
+    }
+
+    const availabilityData = availabilityResult.data
+    const availableKitIds = availabilityData.map(avail => avail.kit_id)
+
+    const kitsResult = await fetchByIds(() => supabase
       .from('kits')
       .select(`
         id,
@@ -510,29 +574,23 @@ export async function getKits() {
           )
         )
       `)
+      .order('id'), 'id', availableKitIds)
 
     if (kitsResult.error) {
       console.error('Kits query error:', kitsResult.error)
       return { success: false, error: kitsResult.error.message }
     }
 
-    // Try to fetch availability data
-    let availabilityData = []
-    try {
-      const availabilityResult = await supabase
-        .from('kit_availability')
-        .select(`
-          kit_id,
-          warehouse_location,
-          max_kits_available
-        `)
-        
-      if (!availabilityResult.error) {
-        availabilityData = availabilityResult.data || []
-      }
-    } catch (err) {
-      console.warn('Kit availability table might not exist:', err.message)
-    }
+    // Kit prices come from the kit_price_calc view
+    const kitPricesResult = await fetchByIds(
+      () => supabase.from('kit_price_calc').select('kit_id, kit_price').order('kit_id'),
+      'kit_id',
+      availableKitIds
+    )
+    const kitPriceMap = {}
+    ;(kitPricesResult.data || []).forEach(row => {
+      kitPriceMap[row.kit_id] = row.kit_price === null ? null : Number(row.kit_price)
+    })
 
     // Create a map of availability data by kit_id
     const availabilityMap = {}
@@ -555,20 +613,14 @@ export async function getKits() {
     // Fetch product images only for first kit item products.
     let productImagesMap = {}
     if (firstProductIds.size > 0) {
-      const imagesResult = await supabase
-        .from('product_images')
-        .select('id, product_id, bucket, path, sort_order, is_primary')
-        .in('product_id', Array.from(firstProductIds))
-        .order('sort_order')
+      const imagesResult = await fetchByIds(
+        () => supabase.from('product_images').select('id, product_id, bucket, path, sort_order, is_primary').order('id'),
+        'product_id',
+        Array.from(firstProductIds)
+      )
 
       if (imagesResult.data) {
-        const imageMap = {}
-        imagesResult.data.forEach(image => {
-          if (!imageMap[image.product_id]) {
-            imageMap[image.product_id] = []
-          }
-          imageMap[image.product_id].push(image)
-        })
+        const imageMap = groupBy(imagesResult.data, 'product_id')
 
         // Process signed URLs for all images
         for (const [productId, images] of Object.entries(imageMap)) {
@@ -588,8 +640,8 @@ export async function getKits() {
       // Get primary warehouse
       const primaryAvailability = kitAvailability.find(avail => avail.max_kits_available > 0) || kitAvailability[0]
       
-      // Get kit price
-      const kitPrice = Math.floor(Math.random() * 800 + 200) + 0.99
+      // Kit price from the database; null when a component has no valid price
+      const kitPrice = kitPriceMap[kit.id] ?? null
       
       // Determine overall condition from kit items' products
       let overallCondition = 'New'
@@ -691,7 +743,7 @@ export async function getKits() {
     })
 
     // Only return kits that are in stock
-    const inStockKits = transformedData.filter(kit => kit.in_stock)
+    const inStockKits = transformedData.filter(kit => kit.in_stock && kit.price !== null)
 
     return { success: true, data: inStockKits }
   } catch (err) {
@@ -1114,30 +1166,21 @@ export async function getPowerSources() {
 }
 
 /**
- * Get product prices from the prices table
+ * Get the current selling price for every product
+ * (latest base price x condition multiplier, from the product_price view)
  * @returns {Promise<{success: boolean, data?: any[], error?: string}>}
  */
 export async function getProductPrices() {
   try {
-    const { data, error } = await supabase
-      .from('prices')
-      .select('product_id, price_aa, created_at')
-      .order('created_at', { ascending: false })
+    const { data, error } = await fetchAllRows(() =>
+      supabase.from('product_price').select('product_id, base_price, multiplier, price, price_date').order('product_id')
+    )
 
     if (error) {
       return { success: false, error: error.message }
     }
 
-    // Get most recent price for each product
-    const latestPrices = {}
-    data.forEach(price => {
-      if (!latestPrices[price.product_id] || 
-          new Date(price.created_at) > new Date(latestPrices[price.product_id].created_at)) {
-        latestPrices[price.product_id] = price
-      }
-    })
-
-    return { success: true, data: Object.values(latestPrices) }
+    return { success: true, data }
   } catch (err) {
     return { success: false, error: err.message }
   }
@@ -1190,11 +1233,9 @@ export async function getProductById(productId) {
         .eq('id', productId)
         .single(),
       supabase
-        .from('prices')
-        .select('product_id, price_aa, created_at')
-        .eq('product_id', productId)
-        .order('created_at', { ascending: false })
-        .limit(1),
+        .from('product_price')
+        .select('product_id, price')
+        .eq('product_id', productId),
       supabase
         .from('product_images')
         .select('id, product_id, bucket, path, sort_order, is_primary')
@@ -1223,8 +1264,9 @@ export async function getProductById(productId) {
       }
     }
 
-    const actualPrice = pricesResult.data?.[0]?.price_aa
-    const price = actualPrice || (Math.floor(Math.random() * 300 + 50) + 0.99)
+    // Selling price (latest base price x condition multiplier); null when unavailable
+    const rawPrice = pricesResult.data?.[0]?.price
+    const price = rawPrice === null || rawPrice === undefined ? null : Number(rawPrice)
 
     // Process product images with signed URLs
     const productImages = imagesResult.data ? await getProductImageUrls(imagesResult.data) : []
@@ -1350,7 +1392,7 @@ export async function getComboById(comboId) {
     
     const totalQuantity = comboAvailability.reduce((sum, avail) => sum + (avail.max_combos_available || 0), 0)
     const primaryAvailability = comboAvailability.find(avail => avail.max_combos_available > 0) || comboAvailability[0]
-    const comboPrice = combo.combo_price_calc?.[0]?.combo_price || null
+    const comboPrice = combo.combo_price_calc?.[0]?.combo_price ?? null
 
     // Determine overall condition
     let overallCondition = 'New'
@@ -1509,7 +1551,7 @@ export async function getKitById(kitId) {
     
     const totalQuantity = kitAvailability.reduce((sum, avail) => sum + (avail.max_kits_available || 0), 0)
     const primaryAvailability = kitAvailability.find(avail => avail.max_kits_available > 0) || kitAvailability[0]
-    const kitPrice = kit.kit_price_calc?.[0]?.kit_price || null
+    const kitPrice = kit.kit_price_calc?.[0]?.kit_price ?? null
 
     // Determine overall condition
     let overallCondition = 'New'
@@ -1556,7 +1598,7 @@ export async function getKitById(kitId) {
       condition_name: overallCondition,
       condition_id: overallConditionId,
       condition_description: `Kit contains items in ${overallCondition.toLowerCase()} condition`,
-      price: kitPrice || Math.floor(Math.random() * 800 + 200) + 0.99,
+      price: kitPrice,
       quantity: totalQuantity,
       in_stock: totalQuantity > 0,
       warehouse_location: primaryAvailability?.warehouse_location || null,
