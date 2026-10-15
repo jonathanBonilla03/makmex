@@ -61,6 +61,7 @@ erDiagram
 
 | View | Purpose |
 |---|---|
+| `product_price` | Selling price per product: latest base price × condition multiplier. Returns NULL if the product has no valid price. |
 | `kit_price_calc`, `combo_price_calc` | Total bundle price from latest component prices, condition multipliers, discounts, and quantities. Returns NULL if any component has no valid price. |
 | `kit_line_price_calc`, `combo_line_price_calc` | Line-by-line price breakdown for each bundle |
 | `kit_availability`, `combo_availability` | How many complete bundles each warehouse can assemble from current stock |
@@ -76,6 +77,7 @@ After the capstone, I audited the live database and fixed the following.
 | Kits and combos shown as available when they couldn't be assembled | Availability views used an `INNER JOIN` to inventory, so a component with no stock record at a warehouse was skipped instead of counted as zero | Check every bundle against every warehouse (`CROSS JOIN`) and treat missing stock as zero (`LEFT JOIN` + `COALESCE`) | Kits shown as available: 3,355 → 492. Combos: 133 → 49. |
 | Bundles silently underpriced | `SUM()` ignores NULL, so a component with no price was treated as free | Return NULL for the bundle when any component lacks a valid price; use the latest dated price per product | 6 kits flagged; no other prices changed |
 | Duplicate inventory rows | The same product/warehouse pair was imported more than once | Merged 32 duplicate rows (quantities summed) and added a unique constraint | Total stock unchanged at 5,160 units |
+| Storefront showing random prices | The catalog requested whole tables in one call, but the API returns at most 1,000 rows (13,000+ products, 13,000+ prices, 10,000+ kit availability rows). Missing prices fell back to `Math.random()`; condition multipliers were never applied | Added a `product_price` view, paged all catalog queries, read kit and combo prices from their views, and removed every random fallback | Catalog prices now match the database; in-stock products, kits, and combos are no longer cut off at the first 1,000 rows |
 | Customer and order data publicly readable | RLS policies allowed the public API key to read and insert customer and order rows | Removed browser access to sales tables; made `order_full_view` respect RLS; closed a public function endpoint | Customer PII no longer exposed |
 
 Remaining items: 55 prices are null or zero (5 of those products are in stock), 15 products have no price row, and 51 price rows have no product attached. These need business input rather than a query fix.

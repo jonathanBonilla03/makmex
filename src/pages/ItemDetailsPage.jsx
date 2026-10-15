@@ -183,6 +183,7 @@ export default function ItemDetailsPage() {
   const { t, translateConditionName, translatePowerSource, translateProductType } = useLanguage();
   
   const [item, setItem] = useState(null);
+  const hasPrice = item?.price !== null && item?.price !== undefined;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -296,7 +297,7 @@ export default function ItemDetailsPage() {
   }, [images]);
 
   const handleAddToCart = () => {
-    if (item && item.in_stock) {
+    if (item && item.in_stock && hasPrice) {
       for (let i = 0; i < quantity; i++) {
         addToCart(item);
       }
@@ -399,7 +400,7 @@ export default function ItemDetailsPage() {
             <h1 className="text-2xl font-bold mb-2">{item.name || item.description}</h1>
             
             <div className="text-3xl font-extrabold text-makmex-orange mb-4">
-              {item.price.toFixed(2)} MXN
+              {hasPrice ? `${Number(item.price).toFixed(2)} MXN` : t('priceUnavailable')}
             </div>
             
             {item.quantity > 0 && item.quantity <= 5 && (
@@ -432,17 +433,18 @@ export default function ItemDetailsPage() {
             
             <button
               onClick={handleAddToCart}
-              disabled={!item.in_stock}
+              disabled={!item.in_stock || !hasPrice}
               className={`w-full py-3 rounded-lg font-semibold text-lg transition ${
-                item.in_stock
+                item.in_stock && hasPrice
                   ? addedToCart
                     ? "bg-green-600 text-white"
                     : "bg-makmex-orange text-black hover:bg-makmex-ember"
                   : "bg-makmex-border text-makmex-muted cursor-not-allowed"
               }`}
             >
-              {addedToCart ? t('addedToCart') : 
-               item.in_stock ? t('addToCart') : t('outOfStock')}
+              {addedToCart ? t('addedToCart') :
+               !item.in_stock ? t('outOfStock') :
+               !hasPrice ? t('priceUnavailable') : t('addToCart')}
             </button>
           </div>
 

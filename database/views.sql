@@ -11,6 +11,25 @@
 --   line price = unit price x (1 - bundle discount) x quantity
 -- ---------------------------------------------------------------------
 
+-- Selling price per product: latest base price x condition multiplier.
+-- NULL when the product has no valid price, so the store shows "Price unavailable".
+CREATE OR REPLACE VIEW public.product_price WITH (security_invoker = true) AS
+WITH latest_price AS (
+  SELECT DISTINCT ON (product_id) product_id, price_aa, created_at
+  FROM public.prices
+  WHERE product_id IS NOT NULL
+  ORDER BY product_id, created_at DESC NULLS LAST
+)
+SELECT p.id AS product_id,
+       lp.price_aa AS base_price,
+       c.multiplier,
+       (CASE WHEN lp.price_aa > 0 AND c.multiplier IS NOT NULL
+             THEN lp.price_aa * c.multiplier END)::numeric(12,2) AS price,
+       lp.created_at AS price_date
+FROM public.products p
+LEFT JOIN latest_price lp ON lp.product_id = p.id
+LEFT JOIN public.conditions c ON c.id = p.condition_id;
+
 -- Total price per kit. Returns NULL when any component lacks a valid
 -- price, so a missing price is visible instead of silently undercounted.
 CREATE OR REPLACE VIEW public.kit_price_calc AS

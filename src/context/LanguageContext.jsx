@@ -25,6 +25,7 @@ const translations = {
     addToCart: "Add to Cart",
     viewDetails: "View Details",
     outOfStock: "Out of Stock",
+    priceUnavailable: "Price unavailable",
     inCart: "In Cart",
     clearCart: "Clear Cart",
     checkout: "Checkout",
@@ -186,6 +187,7 @@ const translations = {
     addToCart: "Agregar al Carrito",
     viewDetails: "Ver Detalles", 
     outOfStock: "Sin Existencias",
+    priceUnavailable: "Precio no disponible",
     inCart: "En Carrito",
     clearCart: "Vaciar Carrito",
     checkout: "Finalizar Compra",
@@ -365,8 +367,11 @@ export function LanguageProvider({ children }) {
   };
   
   const formatPrice = (price) => {
+    if (price === null || price === undefined || Number.isNaN(Number(price))) {
+      return translations[language].priceUnavailable;
+    }
     const currency = translations[language].currency;
-    return `${currency}${price.toFixed(2)}`;
+    return `${currency}${Number(price).toFixed(2)}`;
   };
 
   // Helper to translate condition names by ID
